@@ -870,30 +870,36 @@ def main():
         if not non_fatal:
             raise
 
-    # ---- 7. post-save: inject scale_fmt and fix targets ------------------
-    # NVFP4 experts use FP8-e4m3 scales; vLLM's DeepseekV4 reads
-    # config.quantization_config["scale_fmt"] for the FP8 attn path. Inject.
+    # ---- 7. post-save: fix expert target names (HF naming) ---------------
+    # Recipe targets use upstream Linear names (w1/w2/w3); vLLM's MoE scheme
+    # probe expects HF names (gate_proj/up_proj/down_proj). Rewrite the
+    # targets in the saved config.
+    #
+    # NOTE: do NOT inject scale_fmt — RedHat's reference NVFP4-FP8 config
+    # does not set this field, and the per-group scale_dtype already lives
+    # inside each config_group's `weights.scale_dtype`. Setting `scale_fmt:
+    # ue8m0` at the top of quantization_config was a sibling-W4A16-path
+    # artifact and is not load-bearing for the NVFP4-MoE backend. Verified
+    # 2026-05-20 against `RedHatAI/DeepSeek-V4-Flash-NVFP4-FP8/config.json`.
     if is_main:
         out_cfg = os.path.join(args.output, "config.json")
         if os.path.exists(out_cfg):
             with open(out_cfg) as f:
                 _cfg = json.load(f)
             _qc = _cfg.setdefault("quantization_config", {})
-            if _qc.get("scale_fmt") is None:
-                _qc["scale_fmt"] = "ue8m0"
-                print("[post-save] set quantization_config.scale_fmt = ue8m0",
-                      flush=True)
-            # Recipe targets use upstream names (w1/w2/w3); vLLM's MoE scheme
-            # probe checks HF names (gate_proj/up_proj/down_proj). Rewrite.
+            _qc.pop("scale_fmt", None)
             for g in _qc.get("config_groups", {}).values():
                 tgts = g.get("targets") or []
                 g["targets"] = [
                     t.replace("(w1|w2|w3)", "(gate_proj|up_proj|down_proj)")
                     for t in tgts
                 ]
-            with open(out_cfg, "w") as f:
+            tmp_cfg = out_cfg + ".tmp"
+            with open(tmp_cfg, "w") as f:
                 json.dump(_cfg, f, indent=2)
-            print("[post-save] config.json updated (scale_fmt, HF target names)",
+            os.replace(tmp_cfg, out_cfg)
+            print("[post-save] config.json updated: HF target names; "
+                  "scale_fmt removed (matches RedHat reference)",
                   flush=True)
 
     if is_main:
