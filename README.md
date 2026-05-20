@@ -16,6 +16,16 @@ RedHat's release uses stock `transformers.DeepseekV4PreTrainedModel`, which has 
 
 The quantization recipe (NVFP4 experts + FP8_BLOCK attn) is identical to RedHat's; the difference is purely architectural — what arrives at the quantizer.
 
+### Verified against RedHat's published artifact (2026-05-20)
+
+Direct inspection of `RedHatAI/DeepSeek-V4-Flash-NVFP4-FP8` via the HF API:
+
+- `model.safetensors.index.json`: **0 of 133,918 tensor keys match `mtp`** → MTP weights absent
+- `config.json`: `num_nextn_predict_layers: 1` declared in architecture, but no MTP weights to back it
+- Net effect for users: `vllm serve ... --speculative-config method=mtp num_speculative_tokens=2` against RedHat's artifact will fail to load the draft model
+
+This repo's `verify_mtp_keys.py` confirms the inverse on our saved output (≥6 unconditional MTP Linear weights present + scales).
+
 ## Status
 
 | Phase | What | Status |
