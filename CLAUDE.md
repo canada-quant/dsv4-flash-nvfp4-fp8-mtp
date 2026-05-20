@@ -45,6 +45,13 @@ The sibling repo `canada-quant/dsv4-flash-w4a16-fp8-mtp` carries the GPTQ-path s
 ## Standing operational rules (added 2026-05-20)
 
 - **Two goals, equal priority**: (1) ship `canada-quant/DeepSeek-V4-Flash-NVFP4-FP8-MTP` to HF, AND (2) contribute back to OSS (vLLM, llm-compressor, compressed-tensors, transformers, deps) as bugs/missing-tests/broken-assumptions are discovered during the artifact work. Goal 2 is not "queue for after"; OSS fixes ship IN PARALLEL with the long calibration run, in a separate shell, before they're forgotten.
+- **Search upstream before working — every time.** Before filing an issue, opening a PR, monkey-patching around a dependency, or even concluding "X doesn't work on Y," search the target repo's issues, PRs (open AND closed), recent commits, and forks. Reasons:
+  - the bug may already be reported, with maintainer responses that shape our framing
+  - a PR may already be open — we should comment with our reproducer instead of duplicating
+  - a recent merge may already fix it on `main` and we just need to pin the right version
+  - forks may already carry the workaround we'd otherwise rediscover
+  - related discussions and design docs inform our PR body and increase merge-readiness
+  Use `gh api search/issues`, `gh search prs`, GitHub MCP `github_search_issues` / `github_search_code` / `github_list_pull_requests`, or `WebFetch`. Capture findings in `docs/findings/upstream_research_*.md` per topic so the next session inherits the search receipts and doesn't redo them.
 - **Commit and push findings continuously, not batched at end.** Diagnostic write-ups, fix designs, repros — all go into the repo (`notes/` or `docs/findings/`) as they're discovered. Personal memory entries are fine to mirror but NOT a substitute for repo markdown. If a finding lives only in chat output, that's a bug.
 - **Gates before launch/commit:** (a) diff for save/checkpointing changes before commit + show atomic .tmp+rename + resume-skip + measured layer checkpoint size against /scratch headroom; (b) 4-rank A/B four-number report — `total keys / unique experts / MTP keys / expert weight-scale ratio vs 1-rank baseline` — not "looks good"; (c) status checks at hour 4 and hour 8 of the full 8-rank run.
 - **Within gates, execute autonomously.** Push back if the user's framing is wrong, surface forks instead of silently picking, prefer py-spy + one-level-deeper reading over confident claims from a single file grep (see `memory/check_called_functions_not_just_obvious_file.md`).
