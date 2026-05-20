@@ -185,6 +185,95 @@ class _CompatModel(nn.Module):
     def forward(self, input_ids: torch.Tensor, **kwargs) -> torch.Tensor:
         return self.model(input_ids, **kwargs)
 
+    def save_pretrained(self, save_directory, save_compressed: bool = True, **kw):
+        # Real PreTrainedModel.save_pretrained is wrapped by llmcompressor's
+        # modify_save_pretrained. We're not a PreTrainedModel, so write the
+        # underlying transformer state_dict to sharded safetensors ourselves
+        # and rely on the SessionRecipe-attached compressor to emit the
+        # quantization_config when the wrapper calls us.
+        #
+        # With expert-sharded multi-rank: each rank's state_dict() includes a
+        # disjoint slice of the experts (rank N owns experts N*S..(N+1)*S-1,
+        # rest are None and skipped by state_dict). Writing to a shared dir
+        # with overlapping shard names → last-writer-wins corruption. Fix:
+        # each rank writes to _rank_NN/ subdir, then rank 0 merges into one
+        # unified artifact (`scripts.merge_rank_subdirs.merge_rank_subdirs`).
+        from safetensors.torch import save_file
+
+        ws = dist.get_world_size() if dist.is_initialized() else 1
+        rk = dist.get_rank() if dist.is_initialized() else 0
+
+        os.makedirs(save_directory, exist_ok=True)
+        if rk == 0:
+            self.config.save_pretrained(save_directory)
+
+        if ws > 1:
+            target_dir = os.path.join(save_directory, f"_rank_{rk:02d}")
+        else:
+            target_dir = save_directory
+        os.makedirs(target_dir, exist_ok=True)
+
+        state = self.model.transformer.state_dict()
+        if ws > 1 and rk != 0:
+            # Replicated tensors (embed, head, attn, MTP, norms — every key
+            # that does NOT live inside .experts.{N}.) are identical on every
+            # rank. To keep the merged artifact key-disjoint, rank 0 carries
+            # the replicated set and non-rank-0 ranks save ONLY their owned
+            # expert slices. (Verified: rank 0's expert slice + rank N's
+            # expert slice (N>0) are disjoint because contiguous expert
+            # sharding gives each rank a unique contiguous range.)
+            state = {
+                k: v for k, v in state.items()
+                if re.search(r"\.experts\.\d+\.", k)
+            }
+        shards: list[dict[str, torch.Tensor]] = [{}]
+        bytes_per_shard = 5 * (1 << 30)
+        cur_bytes = 0
+        for name, tensor in state.items():
+            t_bytes = tensor.numel() * tensor.element_size()
+            if cur_bytes + t_bytes > bytes_per_shard and shards[-1]:
+                shards.append({})
+                cur_bytes = 0
+            shards[-1][name] = tensor
+            cur_bytes += t_bytes
+
+        n = len(shards)
+        weight_map = {}
+        for i, payload in enumerate(shards, start=1):
+            fname = f"model-{i:05d}-of-{n:05d}.safetensors"
+            save_file(
+                payload,
+                os.path.join(target_dir, fname),
+                metadata={"format": "pt"},
+            )
+            for k in payload:
+                weight_map[k] = fname
+
+        idx = {
+            "metadata": {
+                "total_size": sum(
+                    t.numel() * t.element_size()
+                    for s in shards for t in s.values()
+                )
+            },
+            "weight_map": weight_map,
+        }
+        with open(
+            os.path.join(target_dir, "model.safetensors.index.json"), "w"
+        ) as f:
+            json.dump(idx, f, indent=2)
+
+        if ws > 1:
+            # Barrier 1: all ranks done writing per-rank subdirs.
+            dist.barrier()
+            if rk == 0:
+                from scripts.merge_rank_subdirs import merge_rank_subdirs
+                merge_rank_subdirs(save_directory, world_size=ws, verbose=True)
+            # Barrier 2: rank 0 done merging — safe for any rank to proceed
+            # (and for llmcompressor's from_accelerate to subsequently raise
+            # on non-rank-0 modules; we catch that in main).
+            dist.barrier()
+
 
 # =========================================================================
 # Recipe
@@ -329,6 +418,115 @@ def main():
         print(f"[dist] world_size={world_size} rank={rank} use_dist={use_dist}",
               flush=True)
 
+    # ---- 1b. monkey-patch Observer.synchronize for expert-sharded multi-rank
+    # Why: llmcompressor.observers.base.Observer.synchronize and
+    # MovingAverageObserverBase.synchronize do dist.all_reduce per-module on
+    # past_{min,max}_vals / past_global_{min,max}_vals. With expert sharding
+    # each rank's match_named_modules returns a DIFFERENT set of modules
+    # (rank 0 owns experts 0..63, rank 1 owns 64..127, etc.) — so ranks call
+    # all_reduce on disjoint sets, NCCL desyncs, hangs at subgraph 6/45 inside
+    # mixin.sync_activation_observers. Verified via py-spy across 4 ranks on
+    # the 2026-05-20 dryrun.
+    #
+    # Skipping cross-rank sync is correct under expert sharding: each rank
+    # only sees activations from its own experts (a token routed to expert E
+    # only enters the rank that owns E), so averaging "stats from rank 0's
+    # expert 0" with "stats from rank 1's expert 0" averages NOTHING with
+    # rank 0's real stats (rank 1's expert 0 is None and never observed). For
+    # attention/embed modules that ARE replicated across ranks, each rank
+    # observes its slice of calibration samples (samples/world_size each),
+    # which is enough for min/max observers with 768 samples / 8 ranks = 96
+    # per rank — still well above sample-count needs.
+    #
+    # Upstream fix design (track B PR): add an explicit expert_sharded flag
+    # to observer config OR auto-detect via an initial all_gather of "do you
+    # own this module?" — see memory/canada_quant_brand_strategy.md.
+    if world_size > 1:
+        import llmcompressor.observers.base as _obs_base
+        import llmcompressor.observers.moving_base as _obs_moving
+        _obs_base.Observer.synchronize = lambda self: []
+        _obs_moving.MovingAverageObserverBase.synchronize = lambda self: []
+        if is_main:
+            print(
+                "[patch] Observer.synchronize monkey-patched to no-op "
+                "(expert-sharded multi-rank workaround; see "
+                "memory/nvfp4_multirank_observer_hang.md)",
+                flush=True,
+            )
+
+    # ---- 1c. monkey-patch modify_save_pretrained for sharded multi-rank save
+    # Why: the upstream save_pretrained_wrapper at
+    # llmcompressor/transformers/compression/compressed_tensors_utils.py:47-97
+    # has two problems for sharded-MoE:
+    #   (i)  the actual save_pretrained call is gated on `is_source_process()`
+    #        (rank 0 only) — so non-rank-0 ranks' quantized expert slices are
+    #        never written, and the artifact only has rank 0's experts.
+    #   (ii) `from_accelerate(model)` runs on all ranks unconditionally, and
+    #        calls model.get_submodule(name) for every entry in a broadcast-
+    #        from-rank-0 device map. Non-owning ranks have None at the expert
+    #        ModuleList indices they don't own → `AttributeError: 0 is not
+    #        an nn.Module`.
+    #
+    # Our replacement wrapper:
+    #   - keeps compressor.compress_model(model) on all ranks (this is what
+    #     actually quantizes weights and runs before our save_pretrained).
+    #   - removes is_source_process() gating around our save_pretrained →
+    #     ALL ranks save their slice (to _rank_NN/ subdir; coordinated by
+    #     _CompatModel.save_pretrained).
+    #   - keeps config/recipe writes on rank 0 only.
+    #   - skips to_accelerate/from_accelerate entirely (they break sharded).
+    #
+    # Upstream fix design (track B PR queue): compressed_tensors.offload.
+    # dispatch.dispatch_with_map needs to skip name lookups for modules that
+    # are None on the current rank (sharded-MoE pattern). See
+    # memory/canada_quant_brand_strategy.md queued PRs #3.
+    if world_size > 1:
+        import functools as _fc
+        import llmcompressor.transformers.compression.compressed_tensors_utils as _cts
+        import llmcompressor.entrypoints.utils as _ep_utils
+        from compressed_tensors import ModelCompressor as _ModelCompressor
+        from compressed_tensors.distributed import is_source_process as _is_src
+        from llmcompressor.transformers.compression.compressed_tensors_utils import (
+            update_and_save_recipe as _update_recipe,
+        )
+
+        def _our_modify_save_pretrained(model_to_wrap):
+            if getattr(model_to_wrap.save_pretrained, "_overridden", False):
+                return
+            original_save_fn = model_to_wrap.save_pretrained
+
+            @_fc.wraps(original_save_fn)
+            def _wrapper(save_directory: str,
+                         quantization_format: str | None = None,
+                         save_compressed: bool = True,
+                         **kwargs):
+                compressor = _ModelCompressor.from_pretrained_model(
+                    model_to_wrap, quantization_format=quantization_format
+                )
+                if save_compressed:
+                    compressor.compress_model(model_to_wrap)
+                # ALL ranks save their slice (no is_source_process gate)
+                original_save_fn(save_directory, **kwargs)
+                if _is_src():
+                    compressor.update_config(save_directory)
+                    _update_recipe(model_to_wrap.name_or_path, save_directory)
+                if dist.is_initialized():
+                    dist.barrier()
+                # SKIP from_accelerate — crashes on sharded experts. Our
+                # save_pretrained handles the merge itself before returning.
+
+            _wrapper._overridden = True
+            model_to_wrap.save_pretrained = _wrapper
+
+        _cts.modify_save_pretrained = _our_modify_save_pretrained
+        _ep_utils.modify_save_pretrained = _our_modify_save_pretrained
+        if is_main:
+            print(
+                "[patch] modify_save_pretrained replaced for sharded-MoE save "
+                "(all ranks write their slice; rank 0 merges; skip from_accelerate)",
+                flush=True,
+            )
+
     # ---- 2. ModelArgs from upstream config -------------------------------
     margs = build_model_args(
         args.config, max_batch_size=args.batch_size, max_seq_len=args.max_seq_len
@@ -403,7 +601,86 @@ def main():
     cal = CalibrationModel(transformer)
     model = _CompatModel(cal, margs, upstream_config_path=args.config)
 
-    # ---- 6. recipe + oneshot ---------------------------------------------
+    # ---- 6. patch topk_idxs / sparse_attn / Attention.forward for device --
+    # Why: vendored kernel_shim's sparse_attn does torch.gather over an
+    # index tensor that get_window_topk_idxs / get_compress_topk_idxs compute
+    # on the default device (cpu — we set it that way for the dataloader's
+    # CPU randperm generator). When sequential calibration moves a Block to
+    # cuda, kv lives on cuda but topk_idxs is still cpu → RuntimeError on
+    # gather. Belt-and-suspenders: relocate via cache-clear + wrappers on
+    # the topk functions, monkey-patch sparse_attn at use site, and wrap
+    # Attention/Indexer/Compressor forwards with torch.device(tgt) so lazy
+    # internal allocations land on the right device too.
+    import dsv4_upstream_model as _dsv4
+    _orig_win = _dsv4.get_window_topk_idxs
+    _orig_cmp = _dsv4.get_compress_topk_idxs
+    if hasattr(_orig_win, "cache_clear"):
+        _orig_win.cache_clear()
+    if hasattr(_orig_cmp, "cache_clear"):
+        _orig_cmp.cache_clear()
+
+    def _current_cuda_device() -> torch.device:
+        if torch.cuda.is_available():
+            return torch.device(f"cuda:{torch.cuda.current_device()}")
+        return torch.device("cpu")
+
+    def _win_dev(*a, **kw):
+        r = _orig_win(*a, **kw)
+        target = _current_cuda_device()
+        return r.to(target) if r.device != target else r
+
+    def _cmp_dev(*a, **kw):
+        r = _orig_cmp(*a, **kw)
+        target = _current_cuda_device()
+        return r.to(target) if r.device != target else r
+
+    _dsv4.get_window_topk_idxs = _win_dev
+    _dsv4.get_compress_topk_idxs = _cmp_dev
+
+    from scripts.upstream import kernel_shim as _ks
+    _orig_sparse_attn = _ks.sparse_attn
+
+    def _sparse_attn_dev(q, kv, attn_sink, topk_idxs, softmax_scale):
+        tgt = q.device
+        if topk_idxs.device != tgt:
+            topk_idxs = topk_idxs.to(tgt)
+        if attn_sink.device != tgt:
+            attn_sink = attn_sink.to(tgt)
+        return _orig_sparse_attn(q, kv, attn_sink, topk_idxs, softmax_scale)
+
+    _ks.sparse_attn = _sparse_attn_dev
+    _dsv4.sparse_attn = _sparse_attn_dev
+
+    def _wrap_forward(original_forward):
+        def wrapped(self, *args, **kwargs):
+            tgt = None
+            for a in args:
+                if torch.is_tensor(a):
+                    tgt = a.device
+                    break
+            if tgt is None and torch.cuda.is_available():
+                tgt = torch.device(f"cuda:{torch.cuda.current_device()}")
+            if tgt is None:
+                return original_forward(self, *args, **kwargs)
+            with torch.device(tgt):
+                return original_forward(self, *args, **kwargs)
+        return wrapped
+
+    _dsv4.Attention.forward = _wrap_forward(_dsv4.Attention.forward)
+    _dsv4.Indexer.forward = _wrap_forward(_dsv4.Indexer.forward)
+    _dsv4.Compressor.forward = _wrap_forward(_dsv4.Compressor.forward)
+
+    if is_main:
+        print(
+            "[patch] device-relocation patches applied "
+            f"(_dsv4.sparse_attn is _sparse_attn_dev: "
+            f"{_dsv4.sparse_attn is _sparse_attn_dev}; "
+            f"Attention.forward.__globals__['sparse_attn'] is _sparse_attn_dev: "
+            f"{_dsv4.Attention.forward.__globals__.get('sparse_attn') is _sparse_attn_dev})",
+            flush=True,
+        )
+
+    # ---- 7. recipe + oneshot ---------------------------------------------
     if is_main:
         print(f"[recipe] building NVFP4 recipe (dry_run_one_layer={args.dry_run_one_layer})",
               flush=True)
@@ -428,17 +705,32 @@ def main():
             output_dir=args.output,
         )
     except Exception as exc:
+        msg = str(exc).lower()
         is_offload_twice = (
-            isinstance(exc, ValueError)
-            and "offload a module twice" in str(exc).lower()
+            isinstance(exc, ValueError) and "offload a module twice" in msg
         )
+        # llmcompressor's modify_save_pretrained wrapper, after our save
+        # writes the artifact, calls compressed_tensors.from_accelerate which
+        # does model.get_submodule(name) for every entry in a broadcast-from-
+        # rank-0 device map. With expert sharding, non-owning ranks have None
+        # at experts[i] for indices they don't own → get_submodule raises
+        # `AttributeError: 0 is not an nn.Module`. The artifact has already
+        # been written + merged by our save_pretrained at this point, so this
+        # error is cosmetic. Suppress it. (Upstream fix lives in
+        # compressed_tensors.offload.dispatch.dispatch_with_map; see brand
+        # strategy memory for the PR queue.)
+        is_from_accelerate = (
+            isinstance(exc, AttributeError) and "is not an nn.module" in msg
+        )
+        non_fatal = is_offload_twice or is_from_accelerate
         if is_main:
             print(f"[oneshot] failed with: {type(exc).__name__}: {exc}",
                   flush=True)
-            if is_offload_twice:
-                print("[oneshot] non-fatal: artifact already on disk; "
-                      "continuing to post-save processing.", flush=True)
-        if not is_offload_twice:
+            if non_fatal:
+                reason = "offload-twice" if is_offload_twice else "from_accelerate"
+                print(f"[oneshot] non-fatal ({reason}): artifact already on "
+                      "disk; continuing to post-save processing.", flush=True)
+        if not non_fatal:
             raise
 
     # ---- 7. post-save: inject scale_fmt and fix targets ------------------
