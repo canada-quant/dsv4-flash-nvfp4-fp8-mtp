@@ -453,9 +453,15 @@ def main():
     ap.add_argument("--config", required=True,
                     help="upstream config.json")
     ap.add_argument("--output", required=True, help="output NVFP4-FP8-MTP dir")
-    ap.add_argument("--samples", type=int, default=768)
+    # Defaults match RedHat's reference calibration script at
+    # vllm-project/llm-compressor:examples/quantizing_moe/deepseek_v4_example.py
+    # (branch deepseekv4-experimental). 64 samples × seq 512 × batch 1 is what
+    # RedHat used to produce the RedHatAI/DeepSeek-V4-Flash-NVFP4-FP8 artifact
+    # (GSM8K 0.910). Sample count is bounded by observer min/max convergence,
+    # not by layer count — adding MTP to scope does not require more samples.
+    ap.add_argument("--samples", type=int, default=64)
     ap.add_argument("--max-seq-len", type=int, default=512)
-    ap.add_argument("--batch-size", type=int, default=4)
+    ap.add_argument("--batch-size", type=int, default=1)
     ap.add_argument("--dry-run-one-layer", action="store_true",
                     help="recipe restricted to layer 5 only; gate test for "
                          "multi-rank NCCL on the QuantizationModifier path")
@@ -839,6 +845,15 @@ def main():
             num_calibration_samples=args.samples,
             sequential_targets=["Block"],
             batch_size=args.batch_size,
+            shuffle_calibration_samples=True,
+            # propagate_error=False is what RedHat's reference script sets:
+            # "work around reliance on transformers cache". Without it, the
+            # 2026-05-20 8-rank Phase 2b stalled at subgraph 2 with all 8 ranks
+            # wedged at compute_dynamic_scales_and_zp (identical Python frame,
+            # GPU SM=100% but MEM=0%, ~240W power, 36°C — the canonical
+            # NCCL-or-equivalent multi-rank deadlock signature). See
+            # docs/findings/phase2b_stall_2026_05_20.md.
+            propagate_error=False,
             output_dir=args.output,
         )
     except Exception as exc:
