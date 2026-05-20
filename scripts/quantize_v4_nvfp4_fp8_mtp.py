@@ -198,14 +198,102 @@ class _CompatModel(nn.Module):
         # with overlapping shard names → last-writer-wins corruption. Fix:
         # each rank writes to _rank_NN/ subdir, then rank 0 merges into one
         # unified artifact (`scripts.merge_rank_subdirs.merge_rank_subdirs`).
+        #
+        # All file writes are atomic: data lands at <file>.tmp then is
+        # renamed via os.replace. Partial writes from a killed process can
+        # be discarded by sweeping *.tmp files; valid artifacts on disk are
+        # always complete.
         from safetensors.torch import save_file
 
         ws = dist.get_world_size() if dist.is_initialized() else 1
         rk = dist.get_rank() if dist.is_initialized() else 0
 
         os.makedirs(save_directory, exist_ok=True)
+
+        # Resume-skip: if a complete merged artifact is already on disk,
+        # do not re-run the save. Re-running calibration but reusing a
+        # prior save is supported via re-invoking the script with the
+        # same --output; calibration repeats but save+merge are idempotent.
+        #
+        # Completeness check (anchored on the 2026-05-20 dryrun measurement):
+        #   - >= 37,000 total keys in the weight_map (dryrun: 37,331)
+        #   - 256 unique expert IDs (full set, range 0-255)
+        #   - >= 795 mtp.* keys (dryrun: 799; production adds a few mtp
+        #     weight_scale tensors so this is a safe floor with ~4-key margin)
+        #   - every shard referenced by the weight_map exists on disk with
+        #     non-zero size (catches index-written-but-shard-write-crashed)
+        merged_index = os.path.join(save_directory, "model.safetensors.index.json")
+        if rk == 0 and os.path.exists(merged_index):
+            try:
+                with open(merged_index) as f:
+                    prior = json.load(f)
+                weight_map = prior.get("weight_map", {})
+                prior_keys = list(weight_map.keys())
+                prior_expert_ids = sorted({
+                    int(m.group(1))
+                    for k in prior_keys
+                    if (m := re.search(r"\.experts\.(\d+)\.", k))
+                })
+                prior_mtp_keys = [k for k in prior_keys if "mtp." in k]
+                # Shard-existence verification: every unique shard referenced
+                # in the index must exist on disk with non-zero size.
+                unique_shards = sorted(set(weight_map.values()))
+                missing_or_empty = []
+                for shard_name in unique_shards:
+                    shard_path = os.path.join(save_directory, shard_name)
+                    try:
+                        if os.path.getsize(shard_path) <= 0:
+                            missing_or_empty.append((shard_name, "empty"))
+                    except OSError:
+                        missing_or_empty.append((shard_name, "missing"))
+                complete = (
+                    len(prior_keys) >= 37000
+                    and len(prior_expert_ids) == 256
+                    and len(prior_mtp_keys) >= 795
+                    and not missing_or_empty
+                )
+                if complete:
+                    print(
+                        f"[save] resume-skip: existing artifact at {save_directory} "
+                        f"is complete (keys={len(prior_keys)}, experts={len(prior_expert_ids)}, "
+                        f"mtp={len(prior_mtp_keys)}, shards={len(unique_shards)}). "
+                        "Skipping save+merge.",
+                        flush=True,
+                    )
+                    # Still write config to refresh any post-save edits.
+                    self.config.save_pretrained(save_directory)
+                    if ws > 1:
+                        dist.barrier()
+                    return
+                else:
+                    print(
+                        f"[save] resume-skip: index exists but artifact is incomplete "
+                        f"(keys={len(prior_keys)}, experts={len(prior_expert_ids)}, "
+                        f"mtp={len(prior_mtp_keys)}, missing/empty shards={len(missing_or_empty)}"
+                        f"{'/' + str(missing_or_empty[:3]) if missing_or_empty else ''}). "
+                        "Proceeding with full save.",
+                        flush=True,
+                    )
+            except (json.JSONDecodeError, OSError, ValueError) as e:
+                print(
+                    f"[save] resume-skip: existing index unreadable ({e}); "
+                    "proceeding with full save.",
+                    flush=True,
+                )
+
         if rk == 0:
             self.config.save_pretrained(save_directory)
+
+        # Stale .tmp sweep — a prior killed run may have left
+        # <something>.tmp files that os.replace() didn't get to. Best-effort.
+        if rk == 0:
+            for root, _dirs, files in os.walk(save_directory):
+                for fn in files:
+                    if fn.endswith(".tmp"):
+                        try:
+                            os.unlink(os.path.join(root, fn))
+                        except OSError:
+                            pass
 
         if ws > 1:
             target_dir = os.path.join(save_directory, f"_rank_{rk:02d}")
@@ -241,11 +329,10 @@ class _CompatModel(nn.Module):
         weight_map = {}
         for i, payload in enumerate(shards, start=1):
             fname = f"model-{i:05d}-of-{n:05d}.safetensors"
-            save_file(
-                payload,
-                os.path.join(target_dir, fname),
-                metadata={"format": "pt"},
-            )
+            final_path = os.path.join(target_dir, fname)
+            tmp_path = final_path + ".tmp"
+            save_file(payload, tmp_path, metadata={"format": "pt"})
+            os.replace(tmp_path, final_path)
             for k in payload:
                 weight_map[k] = fname
 
@@ -258,10 +345,11 @@ class _CompatModel(nn.Module):
             },
             "weight_map": weight_map,
         }
-        with open(
-            os.path.join(target_dir, "model.safetensors.index.json"), "w"
-        ) as f:
+        idx_path = os.path.join(target_dir, "model.safetensors.index.json")
+        idx_tmp = idx_path + ".tmp"
+        with open(idx_tmp, "w") as f:
             json.dump(idx, f, indent=2)
+        os.replace(idx_tmp, idx_path)
 
         if ws > 1:
             # Barrier 1: all ranks done writing per-rank subdirs.
@@ -526,6 +614,55 @@ def main():
                 "(all ranks write their slice; rank 0 merges; skip from_accelerate)",
                 flush=True,
             )
+
+    # ---- 1d. per-subgraph progress marker (rank 0 only)
+    # Why: full calibration runs ~10-12h on 8 ranks. The pipeline has no
+    # native intra-calibration resume (filed upstream as feature request);
+    # we can't restart from subgraph N. But we CAN drop a tiny JSON marker
+    # after each SEQUENTIAL_EPOCH_END so an operator inspecting a killed
+    # run knows how far it got — answers "is this dead, or do I wait?"
+    # in one `cat _progress.json`.
+    if is_main:
+        from llmcompressor.modifiers.quantization.quantization import base as _qm_base
+        from llmcompressor.core import EventType as _ET
+        _orig_qm_on_event = _qm_base.QuantizationModifier.on_event
+        _progress_state = {
+            "started_at_utc": _dt.datetime.now(_dt.UTC).isoformat(),
+            "world_size": world_size,
+            "samples": args.samples,
+            "max_seq_len": args.max_seq_len,
+            "batch_size": args.batch_size,
+            "last_subgraph_completed": 0,
+            "last_subgraph_completed_at_utc": None,
+            "elapsed_seconds": 0,
+        }
+        _progress_t0 = time.time()
+
+        def _qm_on_event_with_progress(self, state, event, **kwargs):
+            result = _orig_qm_on_event(self, state, event, **kwargs)
+            if event.type_ == _ET.SEQUENTIAL_EPOCH_END:
+                _progress_state["last_subgraph_completed"] += 1
+                _progress_state["last_subgraph_completed_at_utc"] = (
+                    _dt.datetime.now(_dt.UTC).isoformat()
+                )
+                _progress_state["elapsed_seconds"] = int(time.time() - _progress_t0)
+                try:
+                    os.makedirs(args.output, exist_ok=True)
+                    progress_path = os.path.join(args.output, "_progress.json")
+                    tmp = progress_path + ".tmp"
+                    with open(tmp, "w") as f:
+                        json.dump(_progress_state, f, indent=2)
+                    os.replace(tmp, progress_path)
+                except (OSError, IOError):
+                    pass  # progress marker is best-effort
+            return result
+
+        _qm_base.QuantizationModifier.on_event = _qm_on_event_with_progress
+        print(
+            "[patch] per-subgraph progress marker installed "
+            f"(writes {args.output}/_progress.json on every SEQUENTIAL_EPOCH_END)",
+            flush=True,
+        )
 
     # ---- 2. ModelArgs from upstream config -------------------------------
     margs = build_model_args(

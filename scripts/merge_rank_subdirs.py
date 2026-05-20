@@ -131,8 +131,10 @@ def merge_rank_subdirs(save_directory: str | os.PathLike, world_size: int | None
         "weight_map": merged_weight_map,
     }
     out_path = save_dir / "model.safetensors.index.json"
-    with open(out_path, "w") as f:
+    tmp_path = out_path.with_suffix(out_path.suffix + ".tmp")
+    with open(tmp_path, "w") as f:
         json.dump(merged_idx, f, indent=2)
+    os.replace(tmp_path, out_path)
     if verbose:
         print(f"[merge] wrote unified index with {len(merged_weight_map)} keys "
               f"across {total_shards} shards to {out_path}")

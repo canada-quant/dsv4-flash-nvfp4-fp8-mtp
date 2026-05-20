@@ -17,7 +17,7 @@ The sibling repo `canada-quant/dsv4-flash-w4a16-fp8-mtp` carries the GPTQ-path s
 
 ## Hardware + AWS
 
-- **EC2:** `i-0714f36a266c8c59b`, `p6-b300.48xlarge`, `us-west-2`. **Profile `rozo`** (not default). 3-day prepaid spot reservation.
+- **EC2:** `i-0714f36a266c8c59b`, `p6-b300.48xlarge`, `us-west-2a`. **Profile `rozo`** (not default). **On-demand** (verified 2026-05-20 via IMDS `instance-life-cycle: on-demand`). The original handoff said "3-day prepaid spot reservation" — that was wrong. No `spot/instance-action` endpoint, no `capacity-reservation-id`. Reclaim risk from AWS spot is therefore zero; residual risk is the normal hardware/process failure class.
 - **SSH:** `ssh -i ~/.ssh/qwenv4-quant.pem ubuntu@35.161.108.205`
 - **DLAMI:** Ubuntu 24.04 + `/opt/pytorch` Python 3.13 venv with torch 2.11.0+cu130. CUDA 13 bundled at `/opt/pytorch/cuda` is runtime-only; for source builds (vLLM, FlashAttention) use `/usr/local/cuda` after `sudo apt install cuda-toolkit-13-0`.
 - **Existing assets on box** (from the sibling repo's work, can be reused):
@@ -55,10 +55,12 @@ The sibling repo `canada-quant/dsv4-flash-w4a16-fp8-mtp` carries the GPTQ-path s
 - **Commit and push findings continuously, not batched at end.** Diagnostic write-ups, fix designs, repros — all go into the repo (`notes/` or `docs/findings/`) as they're discovered. Personal memory entries are fine to mirror but NOT a substitute for repo markdown. If a finding lives only in chat output, that's a bug.
 - **Gates before launch/commit:** (a) diff for save/checkpointing changes before commit + show atomic .tmp+rename + resume-skip + measured layer checkpoint size against /scratch headroom; (b) 4-rank A/B four-number report — `total keys / unique experts / MTP keys / expert weight-scale ratio vs 1-rank baseline` — not "looks good"; (c) status checks at hour 4 and hour 8 of the full 8-rank run.
 - **Within gates, execute autonomously.** Push back if the user's framing is wrong, surface forks instead of silently picking, prefer py-spy + one-level-deeper reading over confident claims from a single file grep (see `memory/check_called_functions_not_just_obvious_file.md`).
-- **PR queue (file in parallel during artifact work):**
-  1. `vllm-project/vllm` — `bool()` wrap on `is_static_input_scheme = input_quant and not input_quant.dynamic` (`compressed_tensors.py:683,704`); returns `None` instead of `False` when `input_quant=None`. One-liner; file today.
-  2. `neuralmagic/llm-compressor` — `Observer.synchronize` desyncs across ranks with expert-sharded modules (`observers/base.py:157` + `moving_base.py:123`); tag `kylesayrs` (he already knows us from vLLM #41511).
-  3. `neuralmagic/compressed-tensors` — `dispatch_with_map` raises `AttributeError: 0 is not an nn.Module` on sharded ranks (`offload/dispatch.py:95`); plus the sharded-MoE multi-rank save coordination pattern.
+- **PR queue (file in parallel during artifact work)** — repos all moved under `vllm-project/` org:
+  1. `vllm-project/vllm` — `bool()` wrap on `is_static_input_scheme = input_quant and not input_quant.dynamic` (`compressed_tensors.py:621,628,642,650,673` — **5 sites** on main as of 2026-05-20, not 2 as the sibling W4A16 memory said). One-liner; file today.
+  2. `vllm-project/llm-compressor` — `Observer.synchronize` per-Linear `dist.all_reduce` desyncs with expert-sharded modules. **Issue #2734 already filed 2026-05-20 by `pasta-paul` (sibling H200 agent) for the GPTQ-Hessian variant; it names Observer.synchronize as "patch A defensive."** Our action: **comment** with the NVFP4 weight-only confirmation, then follow up with the PR. NOT a new issue.
+  3. `vllm-project/compressed-tensors` — `dispatch_with_map` raises `AttributeError: 0 is not an nn.Module` on sharded ranks (`offload/dispatch.py:95`); plus the sharded-MoE multi-rank save coordination pattern. Fresh issue — no existing report.
+  4. `vllm-project/llm-compressor` — **feature request:** native intra-calibration resume in `SequentialPipeline`. No existing feature request; #1809 is parallel calibration not resume. Our 671B-MoE 10-12h calibration use case is exactly the motivating example.
+- **Upstream PR / issue style** — when filing, **do NOT brand-drop "canada-quant" / "Canada Quant Labs" repeatedly** in PR/issue bodies. Maintainers see the contributor identity in the GitHub UI; redundant brand mentions read as tacky and reduce review-readiness. State the use case factually ("a DeepSeek-V4-Flash NVFP4 quantization with preserved MTP, 671B parameters, 256 experts × 8-rank sharding") — let the artifact and the reproducer carry the credit.
 
 ## What's where in the repo
 

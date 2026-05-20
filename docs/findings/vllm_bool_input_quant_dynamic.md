@@ -1,6 +1,6 @@
 # vLLM `compressed_tensors.py` — `bool()` wrap on `is_static_input_scheme`
 
-**Status:** Surfaced during sibling-repo W4A16 serve smoke testing on H200. One-liner PR; file against `vllm-project/vllm` today, in parallel with calibration.
+**Status:** **Filed 2026-05-20 as `vllm-project/vllm#43248`** by `pasta-paul`. Open, awaiting review. Three distinct sites wrapped (not 5 as the original sibling memory said — the WebFetch was over-counting multi-line continuations of one parenthesized expression).
 
 ## Symptom
 
