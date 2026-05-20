@@ -72,3 +72,14 @@ No exception, no warning about unrecognized fields.
 ## Decision
 
 Tier 1 verdict: **PASS**. No blocker for Phase 2b's production launch (already running). One config-label cleanup (`scale_fmt` removal) committed for the future-state. Tier 2 (harness prep) is next.
+
+## Addendum — Tier 2 result + Tier 3 gating
+
+**Tier 2 (`pytest -q tests/` against the cloned harness at `/data/harness/`):** 195/197 passed in 11.55s. The 2 failures are environment-fixture issues that don't affect actual harness-against-vLLM runs:
+
+- `test_vllm_collect_env_helper_downloads_and_runs_official_script` — tries to download an upstream script over the network; the box doesn't have outbound to wherever it expects.
+- `test_runtime_stats_helper_slices_serve_log_per_phase` — looks for a `runtime_stats_summary.json` that requires a real serve-log slice the test fixture isn't providing.
+
+Neither failure indicates a harness bug. The CLI wrappers, test_official_baseline, oracle, lm_eval, toolcall15, and chat-smoke tests all pass — those are the ones that will gate Phase 5 against our artifact.
+
+**Tier 3 (vLLM load smoke) is gated on Phase 2b finishing**, not just on GPU availability. The dryrun artifact's recipe scope was `--dry-run-one-layer` (layer 5 only). Other layers' expert weights are still BF16 in the saved safetensors, but the saved `config.json` declares all `.ffn.experts.\d+.(gate_proj|up_proj|down_proj)` paths as NVFP4. vLLM would reject the type inconsistency at load. To run a meaningful Tier 3 smoke we need the full Phase 2b artifact, plus vLLM PR #42209 (NVFP4 MoE for DSV4) either merged or pulled into `/data/venv-serve`.
