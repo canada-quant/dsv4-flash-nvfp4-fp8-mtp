@@ -836,6 +836,15 @@ def main():
 
     try:
         from llmcompressor import oneshot
+        # NOTE on `propagate_error=False`: RedHat's reference script sets this
+        # ("work around reliance on transformers cache"). Our pinned
+        # llmcompressor (0.10.1.dev123+gf2aa32e2, branch
+        # kylesayrs/transformers-v5) predates the flag — no `propagate_error`
+        # symbol exists anywhere in the installed source. Passing it would
+        # silently land in **kwargs with no routing. If the stall recurs at
+        # samples=64 batch=1, the next step is to upgrade llmcompressor to
+        # the deepseekv4-experimental branch HEAD which has the flag.
+        # See docs/findings/phase2b_stall_2026_05_20.md.
         oneshot(
             model=model,
             tokenizer=tokenizer,
@@ -846,14 +855,6 @@ def main():
             sequential_targets=["Block"],
             batch_size=args.batch_size,
             shuffle_calibration_samples=True,
-            # propagate_error=False is what RedHat's reference script sets:
-            # "work around reliance on transformers cache". Without it, the
-            # 2026-05-20 8-rank Phase 2b stalled at subgraph 2 with all 8 ranks
-            # wedged at compute_dynamic_scales_and_zp (identical Python frame,
-            # GPU SM=100% but MEM=0%, ~240W power, 36°C — the canonical
-            # NCCL-or-equivalent multi-rank deadlock signature). See
-            # docs/findings/phase2b_stall_2026_05_20.md.
-            propagate_error=False,
             output_dir=args.output,
         )
     except Exception as exc:
