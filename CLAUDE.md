@@ -39,8 +39,19 @@ The sibling repo `canada-quant/dsv4-flash-w4a16-fp8-mtp` carries the GPTQ-path s
 - The user prefers terse, factual responses. Don't write trailing summaries unless asked.
 - Confirm before risky/expensive actions (HF upload, force-push, instance termination).
 - Commit messages: include `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>` (heredoc multi-line, not `-m` flags).
-- Org: `canada-quant` (GitHub) + Canada Quant Labs (planned HF org).
+- Org: `canada-quant` on both GitHub and HF (`huggingface.co/canada-quant`).
 - The repo is **PRIVATE** until the user authorizes Phase 8 (HF release).
+
+## Standing operational rules (added 2026-05-20)
+
+- **Two goals, equal priority**: (1) ship `canada-quant/DeepSeek-V4-Flash-NVFP4-FP8-MTP` to HF, AND (2) contribute back to OSS (vLLM, llm-compressor, compressed-tensors, transformers, deps) as bugs/missing-tests/broken-assumptions are discovered during the artifact work. Goal 2 is not "queue for after"; OSS fixes ship IN PARALLEL with the long calibration run, in a separate shell, before they're forgotten.
+- **Commit and push findings continuously, not batched at end.** Diagnostic write-ups, fix designs, repros — all go into the repo (`notes/` or `docs/findings/`) as they're discovered. Personal memory entries are fine to mirror but NOT a substitute for repo markdown. If a finding lives only in chat output, that's a bug.
+- **Gates before launch/commit:** (a) diff for save/checkpointing changes before commit + show atomic .tmp+rename + resume-skip + measured layer checkpoint size against /scratch headroom; (b) 4-rank A/B four-number report — `total keys / unique experts / MTP keys / expert weight-scale ratio vs 1-rank baseline` — not "looks good"; (c) status checks at hour 4 and hour 8 of the full 8-rank run.
+- **Within gates, execute autonomously.** Push back if the user's framing is wrong, surface forks instead of silently picking, prefer py-spy + one-level-deeper reading over confident claims from a single file grep (see `memory/check_called_functions_not_just_obvious_file.md`).
+- **PR queue (file in parallel during artifact work):**
+  1. `vllm-project/vllm` — `bool()` wrap on `is_static_input_scheme = input_quant and not input_quant.dynamic` (`compressed_tensors.py:683,704`); returns `None` instead of `False` when `input_quant=None`. One-liner; file today.
+  2. `neuralmagic/llm-compressor` — `Observer.synchronize` desyncs across ranks with expert-sharded modules (`observers/base.py:157` + `moving_base.py:123`); tag `kylesayrs` (he already knows us from vLLM #41511).
+  3. `neuralmagic/compressed-tensors` — `dispatch_with_map` raises `AttributeError: 0 is not an nn.Module` on sharded ranks (`offload/dispatch.py:95`); plus the sharded-MoE multi-rank save coordination pattern.
 
 ## What's where in the repo
 
