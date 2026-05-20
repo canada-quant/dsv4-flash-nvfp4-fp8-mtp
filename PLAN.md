@@ -46,6 +46,8 @@ Phase 5 (serve smoke + correctness gate) uses **`jasl/vllm-ds4-sm120-harness`** 
 - `generation-compare` diffs our NVFP4-MTP output against the BF16-MTP baseline; quantization-induced token-level divergence is expected, behavior-shape match is the gate.
 - `lm-eval` integration for GSM8K (the metric RedHat reports as 0.910).
 - **Runtime telemetry captures MTP acceptance rate from the vLLM server log** — this is the headline proof-of-life number for the artifact. RedHat's `RedHatAI/DeepSeek-V4-Flash-NVFP4-FP8` cannot report this number (no MTP weights), so MTP acceptance rate IS the differentiator metric in the model card.
+  - **Upstream reference number:** the harness's checked-in `baselines/20260505_official_b300_mtp2_clean/performance/primary.json` (official DeepSeek-V4-Flash via API on 8× B300, MTP enabled, `bench_random_8192x512`, concurrency 1) reports `spec_acceptance_rate_percent: 7.01` with `spec_drafts: 14354`, `spec_draft_tokens: 28708`, `spec_accepted_tokens: 2012`, `spec_per_position_acceptance_percent: [9.8, 4.21]`. That's the floor our artifact aims to approach.
+  - **Differentiator math for the model card:** `MTP_acceptance(ours) ≥ X%` vs `MTP_acceptance(RedHat) = 0%` (their artifact cannot run with `--speculative_config method=mtp`). Any positive number is the demonstration; matching ~7% is the quality claim.
 
 Caveats (do not re-debate next session):
 - B200 baseline is BF16, NVFP4 artifact will diverge at token level. Use `generation-compare` + `lm-eval` for quality, not `oracle-compare` for strict token oracle.
