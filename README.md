@@ -44,7 +44,7 @@ See [PLAN.md](PLAN.md) for the full plan. See [CLAUDE.md](CLAUDE.md) if you're a
 
 ## Sibling repo
 
-The W4A16-GPTQ recipe (different math, different artifact) lives at `pasta-paul/dsv4-flash-w4a16-fp8-mtp`. NVFP4 was chosen for this repo because:
+The W4A16-GPTQ recipe (different math, different artifact) lives at `canada-quant/dsv4-flash-w4a16-fp8-mtp`. NVFP4 was chosen for this repo because:
 - The B300 NCCL bug we hit on the W4A16 path is in `GPTQModifier._reduce_hessian_to_target_rank` — GPTQ-specific
 - `QuantizationModifier` (used for NVFP4) has zero `dist.*` calls in its main file, so multi-rank should work
 - NVFP4 has hardware tensor-core support on Blackwell B300 — right format for the hardware

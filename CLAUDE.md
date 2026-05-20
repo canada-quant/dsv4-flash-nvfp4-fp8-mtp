@@ -4,7 +4,7 @@ If you're a Claude Code agent resuming work in this repo, **read this first** al
 
 ## Quick context
 
-This repo produces the **first** DeepSeek-V4-Flash NVFP4-FP8 quantization that **preserves the MTP layer**. RedHat shipped `RedHatAI/DeepSeek-V4-Flash-NVFP4-FP8` but they used stock HF transformers' `DeepseekV4PreTrainedModel`, which has `_keys_to_ignore_on_load_unexpected = [r"(^|\.)mtp\..*"]` and silently drops the MTP speculative-decoding head at load time. Our edge: we carry the modeling-class patch + vendored upstream model + decoupled expert sharding from sibling repo `pasta-paul/dsv4-flash-w4a16-fp8-mtp`, and we use **`QuantizationModifier` (RTN-style), not `GPTQModifier`**, which sidesteps the B300 NCCL+NVLink hang we hit on the GPTQ path.
+This repo produces the **first** DeepSeek-V4-Flash NVFP4-FP8 quantization that **preserves the MTP layer**. RedHat shipped `RedHatAI/DeepSeek-V4-Flash-NVFP4-FP8` but they used stock HF transformers' `DeepseekV4PreTrainedModel`, which has `_keys_to_ignore_on_load_unexpected = [r"(^|\.)mtp\..*"]` and silently drops the MTP speculative-decoding head at load time. Our edge: we carry the modeling-class patch + vendored upstream model + decoupled expert sharding from sibling repo `canada-quant/dsv4-flash-w4a16-fp8-mtp`, and we use **`QuantizationModifier` (RTN-style), not `GPTQModifier`**, which sidesteps the B300 NCCL+NVLink hang we hit on the GPTQ path.
 
 **Topology decisions:**
 - **Quantization scheme:** `NVFP4` on routed MoE experts (group_size=16, tensor_group, FP8 e4m3 scales). `FP8_BLOCK` 128×128 on attention Linears + MTP `e_proj`/`h_proj`. Recipe matches RedHat's V4-Flash NVFP4-FP8 *exactly* on the math; the only delta is MTP retention.
@@ -13,7 +13,7 @@ This repo produces the **first** DeepSeek-V4-Flash NVFP4-FP8 quantization that *
 
 ## Why a new repo
 
-The sibling repo `pasta-paul/dsv4-flash-w4a16-fp8-mtp` carries the GPTQ-path scaffolding, 7 dryrun friction patches, and is sized for the *predecessor's* W4A16-FP8 recipe. It's the right home for any GPTQ work (now happening on the predecessor H200 box per the active strategy in that repo's `CLAUDE.md`). NVFP4 is a fundamentally different code path (different `Modifier`, different scheme, no Hessian, different vLLM serve backend), gets a different model card, and ships from a different org (`canada-quant`). Keeping it separate avoids the "what does THIS repo actually produce?" confusion that hits multi-recipe repos.
+The sibling repo `canada-quant/dsv4-flash-w4a16-fp8-mtp` carries the GPTQ-path scaffolding, 7 dryrun friction patches, and is sized for the *predecessor's* W4A16-FP8 recipe. It's the right home for any GPTQ work (now happening on the predecessor H200 box per the active strategy in that repo's `CLAUDE.md`). NVFP4 is a fundamentally different code path (different `Modifier`, different scheme, no Hessian, different vLLM serve backend), gets a different model card, and ships from a different org (`canada-quant`). Keeping it separate avoids the "what does THIS repo actually produce?" confusion that hits multi-recipe repos.
 
 ## Hardware + AWS
 
@@ -79,7 +79,7 @@ notes/                           — design docs, debugging session notes (gitig
 
 ## How to talk to this codebase
 
-When a user says "the artifact" they mean **this repo's NVFP4+FP8+MTP output**, not RedHat's NVFP4-FP8 (no MTP) or the sibling repo's W4A16+FP8+MTP. "MTP" means the speculative-decoding head at upstream key prefix `mtp.0.*` (counter is 0-indexed within MTP, not 43 like the layer number in the architecture). "NVFP4" is the Blackwell-native FP4 format with FP8-e4m3 block scales. "Predecessor" still refers to `pastapaul/DeepSeek-V4-Flash-W4A16-FP8` (the AWQ recipe shipped by the same person who owns the sibling W4A16-MTP repo); RedHat is a separate reference point.
+When a user says "the artifact" they mean **this repo's NVFP4+FP8+MTP output**, not RedHat's NVFP4-FP8 (no MTP) or the sibling repo's W4A16+FP8+MTP. "MTP" means the speculative-decoding head at upstream key prefix `mtp.0.*` (counter is 0-indexed within MTP, not 43 like the layer number in the architecture). "NVFP4" is the Blackwell-native FP4 format with FP8-e4m3 block scales. "Predecessor" still refers to `canada-quant/DeepSeek-V4-Flash-W4A16-FP8` (the AWQ recipe shipped by the same person who owns the sibling W4A16-MTP repo); RedHat is a separate reference point.
 
 ## Differentiator vs RedHat
 
