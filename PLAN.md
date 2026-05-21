@@ -32,10 +32,13 @@ The monkey-patch we land for #3 in this repo is the same code change as the upst
 | 2b | NVFP4 full 8-rank calibration | pending — gated on per-layer checkpointing + 4-number A/B re-verify | calib | 10-12h |
 | 3 | Post-process artifact for vLLM | scaffolded (transfers from sibling) | post | 30 min |
 | 4 | Verify (MTP keys, MTP weights quantized) | scripts ready | verify | 15 min |
-| 5 | vLLM serve smoke + harness battery | **harness chosen**: jasl/vllm-ds4-sm120-harness (see Harness section below) | serve | 1h smoke + 2h harness |
-| 6 | Benchmark vs RedHat (GSM8K, MMLU-Pro) + MTP acceptance rate (the headline diff metric vs RedHat) | TBD | bench | 4-8h |
-| 7 | Model card + README + HF upload | TBD | release | 2h |
-| 8 | Public release (gated on user authorization) | pending | release | n/a |
+| 5a | vLLM serve smoke (no spec_decode) | **DONE** 2026-05-21 07:38Z — `Application startup complete` + sanity completions. Stack: mainline vLLM + PR #42209 cherry-picks + 3 local patches (filed as PRs #43248, #43288, #43290) + `TORCH_CUDA_ARCH_LIST=10.3a` build + `CUDA_HOME=/usr/local/cuda` at serve | serve | done |
+| 5b | vLLM serve smoke WITH `--speculative-config method=mtp` (the MTP differentiator) | **IN PROGRESS** — v1 artifact's MTP is BF16 (Option Y) but vLLM attention forward hardcodes fp8_einsum requiring FP8 wo_a. v2 re-calibration with narrower MTP ignore (excludes only embed/e_proj/h_proj) running on GPU 4 (since 2026-05-21 08:30Z) to produce an artifact with FP8 MTP attn | serve | ~90 min for v2, then retest |
+| 6 GSM8K | Phase 6 GSM8K | **DONE** 2026-05-21 08:21Z — **0.9181 strict / 0.9515 flexible** (BEATS RedHat 0.910) on full 1319 test set, 8-shot, batch_size=1, num_concurrent=8 | bench | done |
+| 6 MMLU-Pro | Phase 6 MMLU-Pro | **IN PROGRESS** — started 2026-05-21 08:25Z, ~50 min ETA. 12032 samples, 0-shot, batch_size=1, num_concurrent=16 | bench | running |
+| 6 MTP acc | Phase 6 spec-decode acceptance rate | **GATED** on Phase 5b. RedHat's `RedHatAI/DeepSeek-V4-Flash-NVFP4-FP8` cannot do this (no MTP weights). Floor target: ~7.01% per upstream B300 baseline | bench | gated |
+| 7 | Model card + README + HF upload (gated on user authorization) | pending | release | 2h |
+| 8 | Public release | pending | release | n/a |
 
 ## Harness choice (settled 2026-05-20)
 
