@@ -48,7 +48,9 @@ CUDA_HOME=/usr/local/cuda VLLM_TEST_FORCE_FP8_MARLIN=1 \
 | IFEval prompt-level loose | 0.847 | **0.893** |
 | MTP spec-decode acceptance — random prompts | 0 (no MTP) | **10.75%** (beats upstream B300 BF16 ref 7.01%) |
 | MTP spec-decode acceptance — instruction-following | 0 | **58.5%** |
-| MTP spec-decode acceptance — **code generation (HumanEval)** | 0 | **85.0%** |
+| MTP spec-decode acceptance — **code generation (HumanEval, raw)** | 0 | **67.29%** |
+| Wall-clock decode tok/s on coding (HumanEval, c=1) | **134.22 tok/s** | **258.98 tok/s** (**1.93× faster**) |
+| TPOT on coding (HumanEval, c=1) | 7.31 ms | **3.68 ms** (50% lower) |
 
 ### GSM8K — full reference frame
 
