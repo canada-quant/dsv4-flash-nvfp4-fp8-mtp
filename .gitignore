@@ -30,3 +30,9 @@ env/
 Thumbs.db
 # Claude Code local state — do not commit
 .claude/
+
+# Internal collaboration docs — keep local, never commit
+CLAUDE.md
+PLAN.md
+RESUME.md
+docs/phase*_*_prep.md

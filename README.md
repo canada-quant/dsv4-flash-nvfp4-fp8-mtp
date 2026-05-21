@@ -52,7 +52,7 @@ The sibling repo `canada-quant/dsv4-flash-w4a16-fp8-mtp` carries the W4A16-GPTQ 
 
 ```
 MODEL_CARD.md                    — also serves as HF README
-PLAN.md                          — phase-by-phase plan + risk register
+LICENSE                          — MIT (matches upstream DeepSeek-V4-Flash)
 docs/
   QUICKSTART.md                  — end-to-end serve recipe
   VLLM_SETUP_ISSUES.md           — the 5 vLLM patches + 14 gotchas
@@ -64,7 +64,7 @@ patches/
   modeling_deepseek_v4.py.diff   — removes mtp.* from _keys_to_ignore_on_load_unexpected
 scripts/
   install_vllm_with_patches.sh   — the one-line installer
-  quantize_v4_nvfp4_fp8_mtp.py   — Phase 2 calibration entry point
+  quantize_v4_nvfp4_fp8_mtp.py   — calibration entry point
   postprocess_for_vllm.py        — config + key surgery for vLLM compatibility
   verify_mtp_keys.py             — confirm MTP keys present in saved artifact
   verify_mtp_quantized.py        — confirm MTP weights are NOT quantized (BF16 pass-through)
@@ -90,4 +90,4 @@ Also filed: [llm-compressor #2745](https://github.com/vllm-project/llm-compresso
 
 ## License
 
-Inherits the upstream DeepSeek-V4-Flash license.
+MIT, inherited from the upstream DeepSeek-V4-Flash license. See [`LICENSE`](LICENSE).
