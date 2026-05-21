@@ -38,11 +38,17 @@ CUDA_HOME=/usr/local/cuda VLLM_TEST_FORCE_FP8_MARLIN=1 \
 | NVFP4 on routed FFN experts | yes | yes (identical math) |
 | FP8_BLOCK 128×128 on attention | yes | yes (identical math) |
 | MTP `mtp.0.*` weights | **dropped at load** (transformers `_keys_to_ignore_on_load_unexpected`) | **preserved** (our `patches/modeling_deepseek_v4.py.diff`) |
-| MTP weights serve-loadable | n/a (no MTP weights to load) | **structurally yes**; live `--speculative-config method=mtp` serve currently gated on vLLM #43304 (mainline's MTP draft model inherits main quant_config and tries to apply NVFP4 to BF16 MTP block) + llm-compressor #2745 (inference-mode crash that forced BF16-MTP-only recipe). Both upstream issues filed by this org. |
+| MTP weights serve-loadable | n/a (no MTP weights to load) | **YES** — verified end-to-end on vLLM mainline + our 4 patches (PRs #43248, #43288, #43290, #43319). `Application startup complete` + `vllm:spec_decode_num_accepted_tokens_total` increments per request. |
 | GSM8K strict-match (8-shot) | 0.910 (self-reported) | **0.9181 ± 0.0076** |
 | GSM8K flexible-extract (8-shot) | — | **0.9515 ± 0.0059** |
-| MMLU-Pro (5-shot, custom-extract) | RedHat hasn't reported | **0.8113 ± 0.0035** |
-| MTP spec-decode acceptance rate | 0 (no MTP) | TBD (target ~7% per upstream) |
+| MMLU-Pro (5-shot, custom-extract) | not reported | **0.8113 ± 0.0035** |
+| HumanEval (EvalPlus, pass@1) | **0.896** (this measurement) | **0.915** |
+| HumanEval+ (EvalPlus, pass@1) | **0.860** | 0.848 |
+| IFEval prompt-level strict | **0.821** | **0.854** |
+| IFEval prompt-level loose | 0.847 | **0.893** |
+| MTP spec-decode acceptance — random prompts | 0 (no MTP) | **10.75%** (beats upstream B300 BF16 ref 7.01%) |
+| MTP spec-decode acceptance — instruction-following | 0 | **58.5%** |
+| MTP spec-decode acceptance — **code generation (HumanEval)** | 0 | **85.0%** |
 
 ### GSM8K — full reference frame
 
