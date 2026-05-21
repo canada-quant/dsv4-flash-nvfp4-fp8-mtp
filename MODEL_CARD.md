@@ -1,7 +1,5 @@
 ---
-license: other
-license_name: deepseek-license
-license_link: LICENSE
+license: mit
 base_model: deepseek-ai/DeepSeek-V4-Flash
 tags:
   - compressed-tensors
@@ -53,12 +51,16 @@ Same 4× B300 hardware, same TP=4, same prompts:
 | Workload | Operating point | This artifact | RedHat |
 |---|---|---|---|
 | AIME 2024 reasoning (thinking=high, c=8) | wall-clock for 30 problems | 476s | 1405s |
+| AIME 2024 reasoning | per-request median tok/s | 182.9 | 99.6 |
 | Coding (HumanEval chat, c=1) | output tok/s | 278.68 | 131.06 |
 | Coding (HumanEval chat, c=4) | output tok/s | 649.35 | 417.87 |
 | Coding (HumanEval chat, c=8) | output tok/s | 1104.89 | 673.12 |
 | Coding (HumanEval chat, c=16) | output tok/s | 1577.20 | 1007.78 |
 
-The speedup ratio at c=1 chat coding is 2.13×; at AIME reasoning it's 2.95×. Reasoning has longer outputs (~17K tokens vs ~500 for coding), which amplifies MTP's per-step advantage. The speedup is bigger on workloads with long outputs and high token-level predictability.
+Two different ratios to disambiguate:
+
+- **Pure decode throughput**: at c=1 chat coding, ours is 2.13× faster. On AIME reasoning at c=8, the per-request median decode rate is 182.9 vs 99.6 tok/s — a **1.84×** decode speedup. The decode ratio is workload-dependent (acceptance % varies) but lands in the 1.8–2.1× range across the workloads measured.
+- **AIME batch wall-clock**: 1405s / 476s = **2.95×**. This includes the truncation-rate differential at the 65K max_tokens cap: 5/30 of our responses truncated vs 2/30 of RedHat's, and truncated responses run to the cap, inflating RedHat's total wall-clock. The 2.95× ratio measures "time to run AIME 2024 end-to-end" rather than pure decode speed, and is the right number to cite for "how long does the bench take" but not for "how fast does the model decode."
 
 ## MTP draft acceptance per workload
 
@@ -79,7 +81,7 @@ TP=4 on 4× B300 (or equivalent Blackwell SXM6 with ≥250 GB HBM each). On this
 
 ## Quick start
 
-See [`docs/QUICKSTART.md`](docs/QUICKSTART.md) in the source repo for the full build recipe, or use the one-line installer:
+See [`docs/QUICKSTART.md`](https://github.com/canada-quant/dsv4-flash-nvfp4-fp8-mtp/blob/main/docs/QUICKSTART.md) in the source repo for the full build recipe, or use the one-line installer:
 
 ```bash
 curl -sL https://raw.githubusercontent.com/canada-quant/dsv4-flash-nvfp4-fp8-mtp/main/scripts/install_vllm_with_patches.sh | bash
@@ -124,11 +126,13 @@ The math of the quantization is the same. The architectural difference is MTP re
 | ignored | `lm_head`, `embed_tokens`, norms, `ffn.gate`, `ffn.shared_experts`, attn `compressor`, attn `indexer`, `attn_sink`, `hc_*` | unquantized (BF16) | n/a |
 | MTP block (`mtp.0.*`) | all 799 keys | unquantized (BF16, preserved verbatim) | n/a |
 
-Calibration corpus: HuggingFaceH4/ultrachat_200k train_sft, 64 samples × max_seq_len 512 × batch_size 1, seed 42. RedHat used 768 samples × 512 from the same corpus; the 64-sample recipe is faster and produces calibration scales close enough that quality benchmarks land within noise.
+Calibration corpus: HuggingFaceH4/ultrachat_200k train_sft, **64 samples** × max_seq_len 512 × batch_size 1, seed 42. RedHat's reference recipe uses 768 samples × 512 from the same corpus.
+
+The 64-sample recipe was used due to time/compute constraints during initial bring-up (12× less coverage than RedHat). On the benchmarks measured here, GSM8K / HumanEval / IFEval / MMLU-Pro / AIME-non-truncated all land within noise of the reference. The visible cost of the reduced coverage is AIME truncation rate: 5/30 of our responses hit the 65K max_tokens cap on long reasoning traces vs 2/30 of RedHat's, which is consistent with looser calibration scales producing less-converging reasoning trajectories. A v0.2 recipe with 768 samples is planned.
 
 ## vLLM patches required
 
-The artifact loads on vLLM mainline + these 5 patches. They're filed upstream and waiting on review. See [`docs/VLLM_SETUP_ISSUES.md`](docs/VLLM_SETUP_ISSUES.md) for the exact diffs.
+The artifact loads on vLLM mainline + these 5 patches. They're filed upstream and waiting on review. See [`docs/VLLM_SETUP_ISSUES.md`](https://github.com/canada-quant/dsv4-flash-nvfp4-fp8-mtp/blob/main/docs/VLLM_SETUP_ISSUES.md) for the exact diffs.
 
 1. PR [#43248](https://github.com/vllm-project/vllm/pull/43248) — `bool()` wrap on `is_static_input_scheme`
 2. PR [#43288](https://github.com/vllm-project/vllm/pull/43288) — `.get("scale_fmt", "ue8m0")` on missing key + BF16 `getattr` follow-up
@@ -147,7 +151,7 @@ The one-line installer applies all four automatically.
 
 ## Reproduction
 
-Full replication recipe in [`docs/recipes/nvfp4_fp8_mtp_replication.md`](docs/recipes/nvfp4_fp8_mtp_replication.md) — covers the 14 gotchas (sm_103a vs sm_100a, calibration recipe, postprocess pipeline, vLLM build flags).
+Full replication recipe in [`docs/recipes/nvfp4_fp8_mtp_replication.md`](https://github.com/canada-quant/dsv4-flash-nvfp4-fp8-mtp/blob/main/docs/recipes/nvfp4_fp8_mtp_replication.md) — covers the 14 gotchas (sm_103a vs sm_100a, calibration recipe, postprocess pipeline, vLLM build flags).
 
 ## Citation
 

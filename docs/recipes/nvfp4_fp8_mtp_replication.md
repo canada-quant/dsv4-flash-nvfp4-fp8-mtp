@@ -459,4 +459,4 @@ This recipe is **load-bearing**. When something in it goes out of date, update i
 - Recipe parameter changes (e.g., `samples`, `group_size`) — update §5 and document the reason.
 - Memory entries created or updated — cross-reference here.
 
-If you (the next agent) find this document contradicts something in the code, **trust the code and update this document**. Code is the source of truth; this is the human-readable map.
+If this document contradicts something in the code, **trust the code and update this document**. Code is the source of truth; this is the human-readable map.
