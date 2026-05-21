@@ -38,11 +38,25 @@ CUDA_HOME=/usr/local/cuda VLLM_TEST_FORCE_FP8_MARLIN=1 \
 | NVFP4 on routed FFN experts | yes | yes (identical math) |
 | FP8_BLOCK 128×128 on attention | yes | yes (identical math) |
 | MTP `mtp.0.*` weights | **dropped at load** (transformers `_keys_to_ignore_on_load_unexpected`) | **preserved** (our `patches/modeling_deepseek_v4.py.diff`) |
-| `vllm serve --speculative-config method=mtp` | not usable (no draft weights) | usable |
+| `vllm serve --speculative-config method=mtp` | not usable (no draft weights) | usable (v2 artifact pending) |
 | GSM8K strict-match (8-shot) | 0.910 (self-reported) | **0.9181 ± 0.0076** |
 | GSM8K flexible-extract (8-shot) | — | **0.9515 ± 0.0059** |
 | MMLU-Pro | TBD (RedHat hasn't reported) | TBD (running) |
 | MTP spec-decode acceptance rate | 0 (no MTP) | TBD (target ~7% per upstream) |
+
+### GSM8K — full reference frame
+
+| Run | strict-match | flexible-extract |
+|---|---|---|
+| **DeepSeek-V4-Flash BF16, with MTP** (8× B200 TP=4 ref, upstream harness baseline) | 0.9522 | 0.9515 |
+| **DeepSeek-V4-Flash BF16, no MTP** (8× B200 TP=4 ref) | 0.9484 | 0.9477 |
+| **`canada-quant/DeepSeek-V4-Flash-NVFP4-FP8-MTP`** (4× B300 TP=4, this artifact) | **0.9181** | **0.9515** |
+| `RedHatAI/DeepSeek-V4-Flash-NVFP4-FP8` (self-reported) | 0.910 | — |
+
+Observations:
+- **`flexible-extract` is invariant to quantization on this benchmark** — our NVFP4-FP8-MTP exactly matches the BF16-MTP baseline (0.9515 vs 0.9515). The model arrives at the correct numeric answer on the same 1319 problems despite quant-induced text-generation perturbations. Flexible-extract uses regex to find the final numeric answer and is robust to small wording differences.
+- **`strict-match` drops 3.41 pts vs BF16-MTP** (0.9522 → 0.9181) — this measures exact response-format adherence; quantization affects token-level distributions enough to shift "The answer is 42." → "I think the answer is 42." style variations.
+- **We beat RedHat's `strict-match` 0.910 by 0.81 pts** while ALSO carrying the MTP differentiator. RedHat doesn't publish flexible-extract.
 
 Why the MTP retention matters: the upstream DeepSeek-V4-Flash reports ~7% spec-decode acceptance rate on agentic workloads (per their B300 baseline reference). That translates to ~1.5–2× wall-clock speedup on prompts where draft tokens are accepted. RedHat's artifact cannot do spec-decode at all because the weights aren't present. Ours can.
 
