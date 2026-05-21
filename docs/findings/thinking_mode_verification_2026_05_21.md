@@ -83,6 +83,10 @@ For AIME / GPQA / LiveCodeBench:
 - Skip `reasoning_effort=max` for first pass (longer outputs → more bench time, lower acceptance expected)
 - Run on `ours-MTP-spec @ TP=4` vs `RedHat @ TP=4` (TP=4 confirmed as the better operating point for our artifact in Phase 6 chat-sweep)
 
+## OpenAI client gotcha
+
+The Python OpenAI SDK rejects `chat_template_kwargs` as a direct kwarg (`AsyncCompletions.create() got an unexpected keyword argument`). Pass via `extra_body={"chat_template_kwargs": {...}}` instead, which the SDK forwards as a top-level field in the request body. Direct `curl` works without this workaround because there's no client-side schema validation.
+
 ## Verdict
 
 **Gates (a), (b), (c) PASSED:**
