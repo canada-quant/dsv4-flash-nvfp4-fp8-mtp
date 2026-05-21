@@ -22,7 +22,7 @@
 | `expert_dtype` | `fp4` | same |
 | `num_nextn_predict_layers` | `1` (MTP slot present) | `1` |
 | `quantization_config.format` | `mixed-precision` | same |
-| `quantization_config.scale_fmt` | **`ue8m0` (injected)** | **NOT PRESENT** |
+| `quantization_config.scale_fmt` | **`ue8m0` (injected — REQUIRED by our fork)** | not present (RedHat uses different load path that doesn't read this field) |
 | Group 0 (attn) format | `float-quantized` | same |
 | Group 1 (experts) format | `nvfp4-pack-quantized` | same |
 | Group 0 target regex | `re:.*\.layers\.5\.attn\.(wq_a|wq_b|wkv|wo_a|wo_b)$` (dryrun-scoped) | `re:.*attn.*(fused_wqa_wkv|wq_b|wo_a|wo_b)$` (production-scoped, fused) |
@@ -31,7 +31,7 @@
 Two divergences from RedHat:
 
 - **Layer scoping** in our targets — artifact of `--dry-run-one-layer`. The production run (no `--dry-run-one-layer` flag) writes unscoped targets matching RedHat's pattern. Not a real divergence.
-- **`scale_fmt: ue8m0` injection** — our post-save logic (carried from sibling W4A16 path) sets this field. RedHat does not. The per-group `scale_dtype` (`torch.float8_e4m3fn`) already specifies the FP8-scale format for the experts group; a top-level `scale_fmt` is redundant and risks being misinterpreted by future vLLM versions. **Action:** removed the injection from `scripts/quantize_v4_nvfp4_fp8_mtp.py` post-save block. Phase 2b is already running with the old script — the final artifact will get a one-liner post-clean after Phase 2b finishes.
+- **`scale_fmt: ue8m0` injection** — our post-save logic sets this. RedHat's HF config doesn't. **[REVERTED 2026-05-21]** This finding's conclusion was wrong. Our jasl/dm120 vLLM fork's `DeepseekV4Attention.__init__` at `vllm/models/deepseek_v4/nvidia/model.py:904` does a hard subscript `config.quantization_config["scale_fmt"]` — missing key → `KeyError` at worker init → server fails to start. RedHat's artifact loads through a different DSV4 code path (probably stock transformers + main-line vLLM) that doesn't read this key; **our fork does**. The "normalize-to-reference" instinct in this finding led to a Phase 5a load crash and ~15 min recovery. The fix: keep injecting `scale_fmt: ue8m0` in the post-save block. See `memory/diverge_from_reference_doesnt_mean_wrong.md` for the meta-rule. Commit `4ac0a20` was the wrong-direction commit; the post-Phase-5a fix re-adds the injection.
 
 ### Index integrity (matches gate report)
 

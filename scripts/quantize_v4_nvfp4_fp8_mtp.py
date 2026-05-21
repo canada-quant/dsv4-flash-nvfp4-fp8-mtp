@@ -903,24 +903,38 @@ def main():
         if not non_fatal:
             raise
 
-    # ---- 7. post-save: fix expert target names (HF naming) ---------------
+    # ---- 7. post-save: ensure scale_fmt + fix expert target names ---------
     # Recipe targets use upstream Linear names (w1/w2/w3); vLLM's MoE scheme
     # probe expects HF names (gate_proj/up_proj/down_proj). Rewrite the
     # targets in the saved config.
     #
-    # NOTE: do NOT inject scale_fmt — RedHat's reference NVFP4-FP8 config
-    # does not set this field, and the per-group scale_dtype already lives
-    # inside each config_group's `weights.scale_dtype`. Setting `scale_fmt:
-    # ue8m0` at the top of quantization_config was a sibling-W4A16-path
-    # artifact and is not load-bearing for the NVFP4-MoE backend. Verified
-    # 2026-05-20 against `RedHatAI/DeepSeek-V4-Flash-NVFP4-FP8/config.json`.
+    # scale_fmt: REQUIRED by our jasl/dm120 vLLM fork at
+    # `vllm/models/deepseek_v4/nvidia/model.py:904`, which does a hard
+    # subscript: `config.quantization_config["scale_fmt"]` (no .get(),
+    # no fallback). Missing key → `KeyError: 'scale_fmt'` at worker
+    # init → server fails to start.
+    #
+    # ORIGINAL TIER-1 FINDING (2026-05-20) was wrong: it removed scale_fmt
+    # to "match RedHat's reference config" which doesn't set the field.
+    # RedHat's artifact loads through a DIFFERENT DSV4 model code path
+    # (probably stock transformers + main-line vLLM) that doesn't read
+    # this key. Our fork DOES read it. See
+    # memory/diverge_from_reference_doesnt_mean_wrong.md for the meta-rule.
+    #
+    # Verified 2026-05-21: Phase 5a serve failed with KeyError at line 904
+    # after the removal; re-adding `scale_fmt: ue8m0` cleared the failure.
     if is_main:
         out_cfg = os.path.join(args.output, "config.json")
         if os.path.exists(out_cfg):
             with open(out_cfg) as f:
                 _cfg = json.load(f)
             _qc = _cfg.setdefault("quantization_config", {})
-            _qc.pop("scale_fmt", None)
+            # Ensure scale_fmt is present — required by our vLLM fork's
+            # DSV4 attention init. "ue8m0" is the standard FP8 block-scale
+            # format identifier; matches the value used by the sibling
+            # W4A16 path and validated for serve on this fork.
+            if not _qc.get("scale_fmt"):
+                _qc["scale_fmt"] = "ue8m0"
             for g in _qc.get("config_groups", {}).values():
                 tgts = g.get("targets") or []
                 g["targets"] = [
@@ -931,8 +945,8 @@ def main():
             with open(tmp_cfg, "w") as f:
                 json.dump(_cfg, f, indent=2)
             os.replace(tmp_cfg, out_cfg)
-            print("[post-save] config.json updated: HF target names; "
-                  "scale_fmt removed (matches RedHat reference)",
+            print("[post-save] config.json updated: HF target names + "
+                  "scale_fmt=ue8m0 (required by our vLLM fork; see comment)",
                   flush=True)
 
     if is_main:
