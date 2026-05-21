@@ -38,7 +38,7 @@ CUDA_HOME=/usr/local/cuda VLLM_TEST_FORCE_FP8_MARLIN=1 \
 | NVFP4 on routed FFN experts | yes | yes (identical math) |
 | FP8_BLOCK 128×128 on attention | yes | yes (identical math) |
 | MTP `mtp.0.*` weights | **dropped at load** (transformers `_keys_to_ignore_on_load_unexpected`) | **preserved** (our `patches/modeling_deepseek_v4.py.diff`) |
-| `vllm serve --speculative-config method=mtp` | not usable (no draft weights) | usable (v2 artifact pending) |
+| MTP weights serve-loadable | n/a (no MTP weights to load) | **structurally yes**; live `--speculative-config method=mtp` serve currently gated on vLLM #43304 (mainline's MTP draft model inherits main quant_config and tries to apply NVFP4 to BF16 MTP block) + llm-compressor #2745 (inference-mode crash that forced BF16-MTP-only recipe). Both upstream issues filed by this org. |
 | GSM8K strict-match (8-shot) | 0.910 (self-reported) | **0.9181 ± 0.0076** |
 | GSM8K flexible-extract (8-shot) | — | **0.9515 ± 0.0059** |
 | MMLU-Pro (5-shot, custom-extract) | RedHat hasn't reported | **0.8113 ± 0.0035** |
