@@ -110,7 +110,7 @@ curl -X POST http://localhost:8089/v1/completions \
 
 - Comment on each of our upstream PRs (#43248, #43288, #43290) linking to the artifact as a real-world reproducer / use case
 - Comment on llm-compressor #2745 + vLLM #43297 + #43304 linking to the artifact as the motivating example
-- (Optional) social: tweet or post about the first MTP-preserving DSV4-Flash NVFP4-FP8 quant
+- (Optional) social: post about the MTP-preserving DSV4-Flash NVFP4-FP8 quant with measured numbers
 
 ## What NOT to claim
 
