@@ -77,7 +77,7 @@ Acceptance does not degrade under batching — flat at 88.0% ± 0.4% across c=1 
 
 ## Recommended serving config
 
-TP=4 on 4× B300 (or equivalent Blackwell SXM6 with ≥250 GB HBM each). On this artifact, TP=8 is **slower** than TP=4 at c≥4 batched concurrencies — by up to 21.6% at c=16. Per-rank MoE expert shards at TP=8 are small enough to underutilize NVFP4 tensor-core kernels on B300. TP=4 is the right operating point for this artifact in production.
+TP=4 on 4× B300 SXM6 (288 GB HBM3e per GPU). On this artifact, TP=8 is **slower** than TP=4 at c≥4 batched concurrencies — by up to 21.6% at c=16. Per-rank MoE expert shards at TP=8 are small enough to underutilize NVFP4 tensor-core kernels on B300. TP=4 is the right operating point for this artifact in production.
 
 ## Quick start
 

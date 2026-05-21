@@ -4,7 +4,7 @@ End-to-end recipe to get the artifact serving with MTP speculative decoding on a
 
 ## Hardware
 
-- **GPU**: 4× NVIDIA B300 SXM6 AC (or B300 PCIe, or similar Blackwell with ≥250GB HBM each). Compute capability **10.3** (`sm_103a`).
+- **GPU**: 4× NVIDIA B300 SXM6 AC (288 GB HBM3e each). Compute capability **10.3** (`sm_103a`).
 - **System RAM**: ≥256GB recommended for the vLLM load path.
 - **Disk**: ~200 GB free for the 172 GB artifact + scratch.
 

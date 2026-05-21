@@ -168,6 +168,8 @@ Resolution for this artifact: used `QuantizationModifier` (RTN-style, weight-onl
 
 This is **for calibration only** — serving the final artifact on vLLM doesn't go through transformers' load path.
 
+**Upstream fix in flight (sibling workstream)**: [huggingface/transformers#46127](https://github.com/huggingface/transformers/pull/46127) — adds a `DeepseekV4NextNPredictor` class so `mtp.*` keys load into real submodules instead of being filtered out. Currently waiting on a `forward()` implementation + tests per maintainer feedback; the artifact in this repo demonstrates the load-path side works end-to-end (saved weights round-trip through calibration → save → vLLM load → spec-decode serve with measured 81.6% MTP acceptance on AIME 2024). When #46127 lands, this gotcha and the `patches/modeling_deepseek_v4.py.diff` patch become obsolete.
+
 ### 7. compressed-tensors `from_accelerate` AttributeError on sharded modules
 
 `offload/dispatch.py:95` raises `AttributeError: 0 is not an nn.Module` when running multi-rank with expert sharding. Workaround: monkey-patch `Observer.synchronize` to short-circuit on rank > 0. Documented in `docs/findings/multirank_observer_sync_hang.md`.
