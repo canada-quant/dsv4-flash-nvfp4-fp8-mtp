@@ -41,7 +41,7 @@ CUDA_HOME=/usr/local/cuda VLLM_TEST_FORCE_FP8_MARLIN=1 \
 | `vllm serve --speculative-config method=mtp` | not usable (no draft weights) | usable (v2 artifact pending) |
 | GSM8K strict-match (8-shot) | 0.910 (self-reported) | **0.9181 ± 0.0076** |
 | GSM8K flexible-extract (8-shot) | — | **0.9515 ± 0.0059** |
-| MMLU-Pro | TBD (RedHat hasn't reported) | TBD (running) |
+| MMLU-Pro (5-shot, custom-extract) | RedHat hasn't reported | **0.8113 ± 0.0035** |
 | MTP spec-decode acceptance rate | 0 (no MTP) | TBD (target ~7% per upstream) |
 
 ### GSM8K — full reference frame
