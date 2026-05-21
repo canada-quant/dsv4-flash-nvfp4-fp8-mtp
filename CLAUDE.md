@@ -42,20 +42,24 @@ The sibling repo `canada-quant/dsv4-flash-w4a16-fp8-mtp` carries the GPTQ-path s
 - Org: `canada-quant` on both GitHub and HF (`huggingface.co/canada-quant`).
 - The repo is **PRIVATE** until the user authorizes Phase 8 (HF release).
 
-## Phase 5a status (2026-05-21)
+## Phase 5/6 status (2026-05-21)
 
-**Phase 5a serve smoke DEFERRED.** 7 sequential serve attempts on mainline vLLM + PR #42209 surfaced cascading mismatches between our W8A16-recipe artifact and the W8A8-dynamic serve path the DSV4 attention forward assumes. Each artifact-side mismatch was patched (`scripts/update_config_for_fused_attn.py`, `scripts/convert_attn_scales_for_vllm.py`); each vLLM-side mismatch was patched locally and filed/queued as upstream PR (#43248, #43288, queued #30 for attention.py:334 fallback).
+**Phase 5a serve smoke GREEN** 2026-05-21 07:38Z. Root cause of earlier failures: vLLM was rebuilt with `TORCH_CUDA_ARCH_LIST=10.0a` but B300's actual compute_cap is **10.3 (sm_103a)**. sm_100a binaries don't run on sm_103a (the `a` suffix is non-portable). Final stack: mainline vLLM + PR #42209 cherry-picks + 3 local patches (filed as PRs #43248, #43288, #43290) + `TORCH_CUDA_ARCH_LIST=10.3a` build + `CUDA_HOME=/usr/local/cuda` at serve.
 
-**Attempt 7 reached forward-path CUDA execution and failed with `cudaErrorNoKernelImageForDevice` at `attention.py:508 out.zero_()`** — an async error indicating DeepGemm kernel binaries weren't built for sm100a in the prebuilt wheel pulled at install time. Next session: rebuild DeepGemm from source for sm100a (`/data/src/vllm/.deps/deepgemm-src` with `TORCH_CUDA_ARCH_LIST=10.0a CUDA_ARCHITECTURES=100a`), retry serve.
+**Phase 6 benchmarks COMPLETE** (no spec_decode):
+- **GSM8K** (8-shot, 1319 problems): **0.9181 strict / 0.9515 flexible** — beats RedHat's 0.910, matches BF16 baseline 0.9515 exactly on flexible-extract
+- **MMLU-Pro** (5-shot, 12032 problems): **0.8113 ± 0.0035** — math 0.9149, law 0.6022 (typical DSV4 spread)
 
-**Artifact is in clean RedHat-aligned-plus-MTP shape** at `/scratch/weights/v4-flash-nvfp4-fp8-mtp/`:
-- 35 shards, 172 GB, 134,309 keys, 256 experts, 799 MTP keys (all Phase 4 gates intact)
-- `attn.*.weight_scale` upgraded BF16 → FP32 (lossless, required by DeepGemm)
-- `config_groups[group_0]` uses FUSED targets regex + dynamic FP8 input_activations matching RedHat exactly
-- `scale_fmt: ue8m0` kept (required by mainline `model.py:909` hard subscript; our PR #43288 makes it optional)
-- MTP block stays BF16, unquantized, present (Option Y)
+**Phase 5b spec-decode IN PROGRESS** — v1 artifact's MTP wo_a is BF16 (Option Y) but vLLM attention forward hardcodes FP8 wo_a. Running v2 re-calibration on GPU 4 with narrower MTP ignore (excludes only embed/e_proj/h_proj) since 2026-05-21 08:30Z. Goal: produce v2 artifact with FP8 MTP attn → load through vLLM MTP draft path → measure spec acceptance rate (target ~7% per upstream).
 
-**Full findings:** `docs/findings/phase5a_serve_deferred_2026_05_21.md`. **Replication recipe:** `docs/recipes/nvfp4_fp8_mtp_replication.md` (14 gotchas + DSV4 Pro template).
+**Upstream contributions filed this session:**
+- vLLM PR #43248 — `bool()` wrap for `is_static_input_scheme` (compressed-tensors)
+- vLLM PR #43288 — `.get('scale_fmt', 'ue8m0')` defensive (DSV4 model.py:909)
+- vLLM PR #43290 — `weight_scale_inv`-or-`weight_scale` fallback (DSV4 attention.py:334)
+- vLLM issue #43297 — FusedMoE `(1,)`-shape global_scale loader broadcast
+- llm-compressor #2745 (filed earlier) — MTP inference-mode crash
+
+**Artifact at `/scratch/weights/v4-flash-nvfp4-fp8-mtp/`** (v1): 35 shards, 172 GB, RedHat-aligned + MTP preserved. Phase 4 gates intact: 134,309 keys, 256 experts, 799 MTP keys. **Findings:** `docs/findings/phase5a_serve_deferred_2026_05_21.md` (historical), `docs/benchmarks/phase6_*.md`. **Replication recipe:** `docs/recipes/nvfp4_fp8_mtp_replication.md` (14 gotchas + DSV4 Pro template). **Model card draft:** `MODEL_CARD.md`.
 
 ## Standing operational rules (added 2026-05-20)
 
