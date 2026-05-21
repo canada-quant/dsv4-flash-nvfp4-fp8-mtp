@@ -50,7 +50,7 @@ This is why "spec-decode gives 1.5-2× speedup" is reported for coding/agentic w
 
 ## Comparison to BF16 baseline (deferred)
 
-Not measured locally — DSV4-Flash BF16 is 1.3 TB and needs TP=8 with careful memory packing on B300. The harness has a checked-in 8× B200 BF16 baseline at `baselines/20260502_b200_tp4_main_5737770c6/` reporting `spec_acceptance_rate_percent: 7.01` on `random_8192x512` at c=1 — but that's a random-prompt benchmark, not coding, so not directly comparable.
+Not measured locally — DSV4-Flash BF16 is ~600 GB and needs TP=8 with careful memory packing on B300. The harness has a checked-in 8× B200 BF16 baseline at `baselines/20260502_b200_tp4_main_5737770c6/` reporting `spec_acceptance_rate_percent: 7.01` on `random_8192x512` at c=1 — but that's a random-prompt benchmark, not coding, so not directly comparable.
 
 If we ran BF16 + MTP on coding prompts, we'd expect:
 - Higher absolute tok/s than NVFP4-FP8 (BF16 has higher per-token GEMM cost but no scale-application overhead; net depends on hardware specifics)

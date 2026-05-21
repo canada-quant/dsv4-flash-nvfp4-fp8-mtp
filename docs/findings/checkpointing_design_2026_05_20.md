@@ -91,7 +91,7 @@ Headroom check: 538 GB artifact + 30% temp overhead = ~700 GB peak during save. 
 
 File one new issue against `vllm-project/llm-compressor`: feature request for intra-calibration resume in `SequentialPipeline`. Body should:
 
-- Describe the use case (671B-parameter MoE, ~10-12h calibration on 8x B300).
+- Describe the use case (~284B-parameter MoE with MTP, ~10-12h calibration on 8x B300).
 - Cite #1809 (parallel calibration) as the design space precedent.
 - Outline the minimum API surface: serialize observer state per subgraph; skip-already-completed-subgraph parameter on `SequentialPipeline.__call__`.
 - Note our compress_module → BF16-preserved-during-calib observation, so the snapshot can be observer-only (small).

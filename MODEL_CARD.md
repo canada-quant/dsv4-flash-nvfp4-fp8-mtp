@@ -19,7 +19,7 @@ A DeepSeek-V4-Flash NVFP4-FP8 quantization that retains the MTP (multi-token-pre
 
 ## What this is
 
-- 172 GB across 35 safetensors shards (vs 1.3 TB BF16 source).
+- 172 GB across 35 safetensors shards (vs ~600 GB BF16 source, MTP block included).
 - Same quantization scheme as `RedHatAI/DeepSeek-V4-Flash-NVFP4-FP8`: NVFP4 (group=16, FP8 e4m3 scales) on routed FFN experts, FP8_BLOCK 128×128 on attention.
 - MTP block (`mtp.0.*`, 799 tensors) kept at BF16 — not dropped at load time, not double-quantized when the MTP draft model is constructed.
 

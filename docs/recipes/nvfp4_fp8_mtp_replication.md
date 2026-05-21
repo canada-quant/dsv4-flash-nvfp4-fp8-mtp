@@ -396,7 +396,7 @@ Captured because the recipe has surprising choices that pure code-read would mis
 - **`input_activations=None` on group_0 (attn) but dynamic="local" on group_1 (experts)** — attn weights are static; expert activations vary per-token and need online scaling. Matches RedHat.
 - **`observer="minmax"` everywhere** — RTN-style. `mse` would be marginally more accurate but `QuantizationModifier`'s minmax path is the one with no `dist.*` calls; switching to `mse` re-introduces collective hangs.
 - **Why ignore `gate` (router) — it's BF16-critical.** The MoE router output drives expert dispatch; quantizing it changes routing and cascades into all downstream quant error budgets.
-- **Why ignore `lm_head` — output projection is sensitive.** RedHat ignores it. Quantizing it on a 671B model loses ~0.5 GSM8K points for 1.5 GB savings — not worth it.
+- **Why ignore `lm_head` — output projection is sensitive.** RedHat ignores it. Quantizing it on a ~284B model loses ~0.5 GSM8K points for 1.5 GB savings — not worth it.
 - **Why ignore `norm` / `q_norm` / `k_norm`** — RMSNorm has multiplicative scale that compounds quant error.
 - **Why 1-rank for Phase 2b (not 8-rank)** — see gotcha #6. The 8-rank path needs `propagate_error` from llm-compressor PR #2008 which isn't in our pin.
 - **Why mainline vLLM (not jasl/dm120)** — see gotcha #12 + memory entry `jasl_dm120_is_sm120_not_sm100.md`. jasl/dm120 is sm120 (consumer Blackwell); our artifact targets sm100a (data-center Blackwell).
@@ -419,7 +419,7 @@ These are filed / queued alongside the artifact work. Every gotcha in §7 is als
 | 8 | vllm-project/vllm | `global_scale` loader `.view([]).copy_()` for shape `(1,)` sources | queued |
 | 9 | vllm-project/vllm | comment on PR #42209 with B300 reproducer | queued (post-merge or pre-merge) |
 
-Branding rule for all filings: do NOT brand-drop "canada-quant" in PR bodies. Maintainers see contributor identity in the GitHub UI; redundant brand mentions reduce review-readiness. State the use case factually ("a 671B-MoE DeepSeek-V4-Flash NVFP4 quantization with preserved MTP, 256 experts × 1-rank calibration").
+Branding rule for all filings: do NOT brand-drop "canada-quant" in PR bodies. Maintainers see contributor identity in the GitHub UI; redundant brand mentions reduce review-readiness. State the use case factually ("a ~284B-MoE DeepSeek-V4-Flash NVFP4 quantization with preserved MTP, 256 experts × 1-rank calibration").
 
 ---
 
