@@ -1,25 +1,44 @@
 #!/usr/bin/env python3
-"""Phase 2 gate — confirm the post-calibration checkpoint has MTP quantized.
+"""Phase 4 gate — confirm MTP is PRESENT and BF16 (Option Y invariant).
 
-Reads ``model.safetensors.index.json`` from the W4A16-FP8 output and checks
-three invariants that distinguish a correctly-MTP-included quant from the
-predecessor's MTP-less one:
+REWRITTEN 2026-05-21 for the NVFP4-FP8-MTP artifact's actual design.
 
-  1. MTP routed experts present and W4A16-quantized
-       expect: 256 tensors matching ``re:mtp\\.\\d+\\.ffn\\.experts\\.\\d+\\.(w1|w2|w3)\\.scale``
-       (256 experts x 3 projections x 1 scale per quantized linear; the actual
-       count of int4 packed weight tensors should match.)
-  2. MTP attention present and FP8_BLOCK-quantized
-       expect: 4 tensors matching ``re:mtp\\.\\d+\\.attn\\.(wq_a|wkv|wq_b|wo_b)\\.scale``
-       with shape consistent with 128x128 blocks.
-  3. MTP passthrough modules present and unquantized (BF16, no scale)
-       expect: ``e_proj``, ``h_proj``, ``shared_head.head``, ``shared_head.norm``,
-       ``enorm``, ``hnorm``, ``attn_norm``, ``attn_sink``, ``hc_0..3``,
-       ``ffn.gate``, ``ffn.shared_experts.*``
+Earlier W4A16 framing (sibling repo) expected MTP to be QUANTIZED — every
+expert and attention projection should have a `.weight_scale`. That gate
+was designed when "MTP quantized like the rest of the model" was the
+target.
 
-Failure of any invariant aborts with a clear message — the most likely cause
-is the MTP module shim in quantize_v4_w4a16_mtp.py being incomplete or the
-recipe regex not matching internal naming.
+The NVFP4 path hit a `RuntimeError: Inplace update to inference tensor
+outside InferenceMode is not allowed` during the MTP block's qparam
+writeback (the shared-embedding lookup in the vendored upstream model
+creates tensors under `inference_mode()`, which traps the in-place
+`weight_scale` write that fires at `sequential_epoch_end`). Both this
+workstream and the H200 sibling workstream independently converged on
+"Option Y": MTP block is sequenced through the pipeline but **excluded
+from the quantization recipe** (via `r"re:.*mtp\\..*"` in the
+QuantizationModifier `ignore` list). MTP weights stay BF16 in the
+artifact, are still PRESENT (not dropped like RedHat's transformers-stock
+loader does), and load cleanly in vLLM with `--speculative_config
+method=mtp`. The differentiator vs RedHat is presence, not precision.
+
+So the gate this script enforces is:
+
+  1. MTP block PRESENT — at least 6 unconditional MTP weight tensors
+     (lower bound; the dryrun's actual mtp.* count was 799).
+  2. ALL sampled MTP `.weight` tensors are bfloat16 — no FP8 / FP4 /
+     packed quantization on MTP modules. Quantized MTP would mean the
+     recipe leaked through the `ignore` list, which is a bug we want to
+     catch.
+  3. NO MTP quantization-scale tensors — no `.weight_scale`,
+     `.weight_scale_inv`, `.weight_packed`, `.weight_global_scale`,
+     `.input_global_scale`, `.weight_zero_point` on any `mtp.*` key. (The
+     `mtp.0.hc_*_scale` keys are architecture-native — head-compressed
+     scales — and excluded by the `.weight_scale` / `.weight_packed` /
+     etc. specificity here.)
+  4. Key MTP modules present by name — `e_proj.weight`, `h_proj.weight`,
+     `emb.tok_emb.weight` (the renamed embedding; see
+     postprocess_for_vllm.py for the rename), plus the attention
+     projections (`wq_a`, `wq_b`, `wkv`, `wo_a`, `wo_b`).
 """
 import argparse
 import json
@@ -27,71 +46,125 @@ import re
 import sys
 from pathlib import Path
 
+from safetensors import safe_open
 
-# Regex patterns over internal naming convention. compressed-tensors stores
-# the quantization scale alongside the quantized weight as `.weight_scale`
-# (W4A16) or `.weight_scale_inv` (FP8_BLOCK in some configurations); we
-# accept either.
-EXPERT_SCALE_RE = re.compile(
-    r"^mtp\.\d+\.ffn\.experts\.\d+\.(w1|w2|w3)\.(weight_scale|weight_scale_inv|scale)$"
+# Tensor-name suffixes that indicate a key is a QUANTIZATION ARTIFACT (not
+# an architecture-native scale like the `hc_*_scale` tensors in DSV4's
+# head-compressed layers).
+QUANT_SUFFIXES = (
+    ".weight_scale",
+    ".weight_scale_inv",
+    ".weight_packed",
+    ".weight_global_scale",
+    ".input_global_scale",
+    ".weight_zero_point",
 )
-ATTN_SCALE_RE = re.compile(
-    r"^mtp\.\d+\.attn\.(wq_a|wkv|wq_b|wo_a|wo_b)\.(weight_scale|weight_scale_inv|scale)$"
-)
-PASSTHROUGH_TAGS = (
-    "e_proj",
-    "h_proj",
-    "shared_head",
-    "enorm",
-    "hnorm",
-    "attn_norm",
-    "attn_sink",
-    "hc_",
-    "ffn.gate",
-    "ffn.shared_experts",
+
+# Required MTP key patterns that must be present (post-postprocess rename).
+REQUIRED_MTP_KEYS = (
+    re.compile(r"^mtp\.\d+\.e_proj\.weight$"),
+    re.compile(r"^mtp\.\d+\.h_proj\.weight$"),
+    re.compile(r"^mtp\.\d+\.emb\.tok_emb\.weight$"),
+    re.compile(r"^mtp\.\d+\.attn\.wq_a\.weight$"),
+    re.compile(r"^mtp\.\d+\.attn\.wq_b\.weight$"),
+    re.compile(r"^mtp\.\d+\.attn\.wkv\.weight$"),
+    re.compile(r"^mtp\.\d+\.attn\.wo_a\.weight$"),
+    re.compile(r"^mtp\.\d+\.attn\.wo_b\.weight$"),
 )
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("model_dir", help="post-calibration W4A16-FP8 model dir")
+    ap.add_argument("model_dir", help="post-calibration NVFP4-FP8-MTP model dir")
     args = ap.parse_args()
 
-    idx_path = Path(args.model_dir) / "model.safetensors.index.json"
+    model_dir = Path(args.model_dir)
+    idx_path = model_dir / "model.safetensors.index.json"
     if not idx_path.exists():
         sys.exit(f"FATAL: {idx_path} not found")
 
     weight_map = json.loads(idx_path.read_text()).get("weight_map", {})
     mtp_keys = sorted(k for k in weight_map if k.startswith("mtp."))
-    expert_scales = [k for k in mtp_keys if EXPERT_SCALE_RE.match(k)]
-    attn_scales = [k for k in mtp_keys if ATTN_SCALE_RE.match(k)]
-    passthrough = [k for k in mtp_keys if any(t in k for t in PASSTHROUGH_TAGS)]
+    mtp_weight_keys = [k for k in mtp_keys if k.endswith(".weight")]
+    mtp_quant_keys = [
+        k for k in mtp_keys if any(k.endswith(suf) for suf in QUANT_SUFFIXES)
+    ]
 
-    print(f"total tensors:           {len(weight_map)}")
-    print(f"MTP tensors:             {len(mtp_keys)}")
-    print(f"MTP expert .scale (W4A16): {len(expert_scales)}")
-    print(f"MTP attn .scale (FP8):     {len(attn_scales)}")
-    print(f"MTP passthrough modules:   {len(passthrough)}")
+    print(f"total tensors in artifact: {len(weight_map)}")
+    print(f"MTP tensors total:         {len(mtp_keys)}")
+    print(f"  of which .weight:        {len(mtp_weight_keys)}")
+    print(f"  of which quant scales:   {len(mtp_quant_keys)} (expect 0)")
 
-    failed = []
-    if len(mtp_keys) == 0:
-        failed.append("no MTP tensors at all — calibration dropped the entire mtp.* block")
-    if len(expert_scales) < 256:
-        failed.append(f"expected >=256 MTP expert scales, found {len(expert_scales)}")
-    if len(attn_scales) < 4:
-        failed.append(f"expected >=4 MTP attention scales, found {len(attn_scales)}")
-    if len(passthrough) == 0:
-        failed.append("expected MTP passthrough modules (e_proj, h_proj, norms, ...) but found none")
+    # Check 1: presence
+    if len(mtp_weight_keys) < 6:
+        sys.exit(
+            f"FAIL: only {len(mtp_weight_keys)} MTP .weight tensors found; "
+            "expected ≥6 (e_proj, h_proj, attn.{wq_a,wq_b,wkv,wo_a,wo_b}). "
+            "The MTP block may have been dropped at save time."
+        )
 
-    if failed:
-        print()
-        print("MTP quantization gate FAILED:")
-        for f in failed:
-            print(f"  - {f}")
+    # Check 2: no quantization on MTP
+    if mtp_quant_keys:
+        print(
+            "FAIL: MTP modules carry quantization-scale tensors — recipe "
+            "leaked through the `ignore` list:"
+        )
+        for k in mtp_quant_keys[:10]:
+            print(f"  {k}")
+        if len(mtp_quant_keys) > 10:
+            print(f"  ... and {len(mtp_quant_keys) - 10} more")
         sys.exit(1)
 
+    # Check 3: required keys present
+    missing = []
+    for pat in REQUIRED_MTP_KEYS:
+        if not any(pat.match(k) for k in mtp_keys):
+            missing.append(pat.pattern)
+    if missing:
+        sys.exit(
+            "FAIL: required MTP keys missing:\n  " + "\n  ".join(missing)
+        )
+
+    # Check 4: dtype audit — every quantize-candidate MTP Linear's .weight
+    # must be bfloat16. The Option Y invariant only applies to tensors
+    # that WOULD have been quantized had the recipe included them
+    # (Linear projections matching the recipe's targets). Norms, heads,
+    # and embeds are legitimately float32 in the DSV4 architecture and
+    # would never be quantized regardless.
+    quant_candidate_pat = re.compile(
+        r"^mtp\.\d+\."
+        r"(attn\.(wq_a|wq_b|wkv|wo_a|wo_b)|e_proj|h_proj"
+        r"|ffn\.experts\.\d+\.(w1|w2|w3))"
+        r"\.weight$"
+    )
+    candidates = [k for k in mtp_weight_keys if quant_candidate_pat.match(k)]
     print()
-    print("MTP quantization gate PASSED")
+    print(
+        f"checking dtypes of {len(candidates)} quantize-candidate MTP Linears "
+        "(sampling head + tail) ..."
+    )
+    samples = candidates[:8] + candidates[-4:]  # head + tail
+    bad_dtype = []
+    for k in samples:
+        shard = weight_map[k]
+        with safe_open(model_dir / shard, framework="pt", device="cpu") as f:
+            t = f.get_tensor(k)
+        dtype_str = str(t.dtype)
+        marker = "OK" if dtype_str == "torch.bfloat16" else "BAD"
+        print(f"  [{marker}] {k}: dtype={dtype_str}, shape={tuple(t.shape)}")
+        if dtype_str != "torch.bfloat16":
+            bad_dtype.append((k, dtype_str))
+    if bad_dtype:
+        sys.exit(
+            "FAIL: MTP quantize-candidate Linears are not bfloat16 — "
+            "Option Y invariant violated:\n  "
+            + "\n  ".join(f"{k}: {dt}" for k, dt in bad_dtype)
+        )
+
+    print()
+    print("MTP gate PASSED — block present, bfloat16, unquantized.")
+    print(f"({len(mtp_weight_keys)} MTP weights ready for vLLM "
+          "`--speculative_config method=mtp` load.)")
 
 
 if __name__ == "__main__":
