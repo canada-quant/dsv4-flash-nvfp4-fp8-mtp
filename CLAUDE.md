@@ -42,6 +42,21 @@ The sibling repo `canada-quant/dsv4-flash-w4a16-fp8-mtp` carries the GPTQ-path s
 - Org: `canada-quant` on both GitHub and HF (`huggingface.co/canada-quant`).
 - The repo is **PRIVATE** until the user authorizes Phase 8 (HF release).
 
+## Phase 5a status (2026-05-21)
+
+**Phase 5a serve smoke DEFERRED.** 7 sequential serve attempts on mainline vLLM + PR #42209 surfaced cascading mismatches between our W8A16-recipe artifact and the W8A8-dynamic serve path the DSV4 attention forward assumes. Each artifact-side mismatch was patched (`scripts/update_config_for_fused_attn.py`, `scripts/convert_attn_scales_for_vllm.py`); each vLLM-side mismatch was patched locally and filed/queued as upstream PR (#43248, #43288, queued #30 for attention.py:334 fallback).
+
+**Attempt 7 reached forward-path CUDA execution and failed with `cudaErrorNoKernelImageForDevice` at `attention.py:508 out.zero_()`** — an async error indicating DeepGemm kernel binaries weren't built for sm100a in the prebuilt wheel pulled at install time. Next session: rebuild DeepGemm from source for sm100a (`/data/src/vllm/.deps/deepgemm-src` with `TORCH_CUDA_ARCH_LIST=10.0a CUDA_ARCHITECTURES=100a`), retry serve.
+
+**Artifact is in clean RedHat-aligned-plus-MTP shape** at `/scratch/weights/v4-flash-nvfp4-fp8-mtp/`:
+- 35 shards, 172 GB, 134,309 keys, 256 experts, 799 MTP keys (all Phase 4 gates intact)
+- `attn.*.weight_scale` upgraded BF16 → FP32 (lossless, required by DeepGemm)
+- `config_groups[group_0]` uses FUSED targets regex + dynamic FP8 input_activations matching RedHat exactly
+- `scale_fmt: ue8m0` kept (required by mainline `model.py:909` hard subscript; our PR #43288 makes it optional)
+- MTP block stays BF16, unquantized, present (Option Y)
+
+**Full findings:** `docs/findings/phase5a_serve_deferred_2026_05_21.md`. **Replication recipe:** `docs/recipes/nvfp4_fp8_mtp_replication.md` (14 gotchas + DSV4 Pro template).
+
 ## Standing operational rules (added 2026-05-20)
 
 - **Two goals, equal priority**: (1) ship `canada-quant/DeepSeek-V4-Flash-NVFP4-FP8-MTP` to HF, AND (2) contribute back to OSS (vLLM, llm-compressor, compressed-tensors, transformers, deps) as bugs/missing-tests/broken-assumptions are discovered during the artifact work. Goal 2 is not "queue for after"; OSS fixes ship IN PARALLEL with the long calibration run, in a separate shell, before they're forgotten.
