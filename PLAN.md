@@ -115,7 +115,7 @@ recipe = QuantizationModifier(
 ## Out of scope for this repo
 
 - W4A16 GPTQ recipe → handled by sibling `canada-quant/dsv4-flash-w4a16-fp8-mtp`
-- V4-Pro → separate repo when V4-Flash NVFP4-MTP ships (likely `canada-quant/dsv4-pro-nvfp4-fp8-mtp`)
+- Other architecture variants → out of scope for this repo
 - vLLM-side kernel patches → already validated in sibling repo's H200 work, not touched here
 
 ## Risk register

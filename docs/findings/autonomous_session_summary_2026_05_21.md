@@ -14,7 +14,7 @@ The artifact at `/scratch/weights/v4-flash-nvfp4-fp8-mtp/` on the B300 box is **
 | ✅ Done | **MMLU-Pro: 0.8113 ± 0.0035** (math 0.9149, law 0.6022) |
 | ✅ Done | Phase 4 MTP retention re-verified after all postprocesses |
 | ✅ Done | `MODEL_CARD.md` written with headlines + reproduction guide |
-| ✅ Done | `docs/recipes/nvfp4_fp8_mtp_replication.md` — 16 gotchas + DSV4 Pro template |
+| ✅ Done | `docs/recipes/nvfp4_fp8_mtp_replication.md` — 16 gotchas + replication template |
 | ✅ Done | `docs/phase7_hf_upload_prep.md` — upload commands gated on user auth |
 | ⏸ Deferred | Phase 5b spec-decode live measurement (gated on upstream) |
 

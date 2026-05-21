@@ -147,7 +147,7 @@ The one-line installer applies all four automatically.
 
 ## Reproduction
 
-Full DSV4 Pro replication template in [`docs/recipes/nvfp4_fp8_mtp_replication.md`](docs/recipes/nvfp4_fp8_mtp_replication.md) — covers the 14 gotchas (sm_103a vs sm_100a, calibration recipe, postprocess pipeline, vLLM build flags).
+Full replication recipe in [`docs/recipes/nvfp4_fp8_mtp_replication.md`](docs/recipes/nvfp4_fp8_mtp_replication.md) — covers the 14 gotchas (sm_103a vs sm_100a, calibration recipe, postprocess pipeline, vLLM build flags).
 
 ## Citation
 

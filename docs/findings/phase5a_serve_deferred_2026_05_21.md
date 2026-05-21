@@ -48,7 +48,7 @@ Also queued: PR #43288 (`scale_fmt` defensive `.get()`) — filed during this se
 
 Attempt 7 reached forward-path CUDA execution and failed in a way that requires rebuilding DeepGemm from source for sm100a, or filing an upstream issue with `vllm-project/deep-gemm` (or equivalent) for B300 kernel binary coverage. Both are multi-hour activities with uncertain outcomes — possibly surfacing the NEXT layer of mismatches (NCCL backend selection, MoE kernel arch, etc.).
 
-The user-set goal was shipping the artifact, with V4-Pro extension gated on benchmark success. Without working serve, no benchmarks. So:
+The user-set goal was shipping the artifact, gated on benchmark success. Without working serve, no benchmarks. So:
 - Continuing to chase serve in this session risks more hours without converging to a working state
 - The artifact (which IS the deliverable) is structurally correct and shipped privately (HF upload still gated on user authorization)
 - Recipe replication doc + upstream PRs ARE forward progress regardless of serve outcome

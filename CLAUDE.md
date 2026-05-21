@@ -59,7 +59,7 @@ The sibling repo `canada-quant/dsv4-flash-w4a16-fp8-mtp` carries the GPTQ-path s
 - vLLM issue #43297 — FusedMoE `(1,)`-shape global_scale loader broadcast
 - llm-compressor #2745 (filed earlier) — MTP inference-mode crash
 
-**Artifact at `/scratch/weights/v4-flash-nvfp4-fp8-mtp/`** (v1): 35 shards, 172 GB, RedHat-aligned + MTP preserved. Phase 4 gates intact: 134,309 keys, 256 experts, 799 MTP keys. **Findings:** `docs/findings/phase5a_serve_deferred_2026_05_21.md` (historical), `docs/benchmarks/phase6_*.md`. **Replication recipe:** `docs/recipes/nvfp4_fp8_mtp_replication.md` (14 gotchas + DSV4 Pro template). **Model card draft:** `MODEL_CARD.md`.
+**Artifact at `/scratch/weights/v4-flash-nvfp4-fp8-mtp/`** (v1): 35 shards, 172 GB, RedHat-aligned + MTP preserved. Phase 4 gates intact: 134,309 keys, 256 experts, 799 MTP keys. **Findings:** `docs/findings/phase5a_serve_deferred_2026_05_21.md` (historical), `docs/benchmarks/phase6_*.md`. **Replication recipe:** `docs/recipes/nvfp4_fp8_mtp_replication.md` (14 gotchas + replication template). **Model card draft:** `MODEL_CARD.md`.
 
 ## Standing operational rules (added 2026-05-20)
 

@@ -116,7 +116,7 @@ curl -X POST http://localhost:8089/v1/completions \
 
 - DO NOT claim "spec-decode acceptance rate X%" — Phase 5b is currently gated on upstream fixes. The model card already states this honestly.
 - DO NOT claim "matches BF16 perfectly" on GSM8K — the flexible-extract match is metric-specific; strict-match shows 3.4 pts drop vs BF16.
-- DO NOT claim DeepSeek Pro support — V4-Pro extension is gated on V4-Flash benchmark success (now satisfied) AND user authorization.
+- DO NOT claim DeepSeek Pro support; this artifact targets DeepSeek-V4-Flash only.
 
 ## After artifact ships
 

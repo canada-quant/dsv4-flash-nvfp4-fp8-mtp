@@ -1,8 +1,6 @@
-# NVFP4-FP8-MTP Replication Recipe — DeepSeek-V4-Flash and beyond
+# NVFP4-FP8-MTP Replication Recipe — DeepSeek-V4-Flash
 
-**Purpose:** This document is the load-bearing recipe for producing an MTP-preserving NVFP4-FP8 quantization of DeepSeek-V4-Flash, and the **template** for repeating the formula on DeepSeek-V4-Pro and other MoE+MTP DSV-family architectures.
-
-If V4-Flash benchmarks come in at parity or better than RedHat's NVFP4-FP8 (no MTP) + main-line W4A16 references, the next artifact (V4-Pro NVFP4-FP8-MTP) is intended to be a **direct re-run of this recipe**, with only the items in §11 (DSV4 Pro deltas) adjusted.
+**Purpose:** This document is the load-bearing recipe for producing an MTP-preserving NVFP4-FP8 quantization of DeepSeek-V4-Flash. The same formula should generalize to other MoE+MTP architectures in the DSV-family with the items in §11 adjusted.
 
 Document conventions:
 - "RedHat reference" = `RedHatAI/DeepSeek-V4-Flash-NVFP4-FP8` (drops MTP).
@@ -242,12 +240,12 @@ torchrun --nproc-per-node 1 scripts/quantize_v4_nvfp4_fp8_mtp.py \
     --samples 64 --max-seq-len 512 --batch-size 1
 ```
 
-**Note: this is 1-rank, not 8-rank.** The 8-rank multi-rank run hit a cache-offload deadlock at samples ≥ 256 (filed as llm-compressor #2743; `propagate_error` flag in main not in our pin). The 1-rank path completes in ~87 minutes for V4-Flash on B300. For DSV4 Pro (larger), expect ~3–6 hours depending on routed-expert count; pin the `propagate_error` fix or split the calibration into resumable chunks if multi-rank is needed.
+**Note: this is 1-rank, not 8-rank.** The 8-rank multi-rank run hit a cache-offload deadlock at samples ≥ 256 (filed as llm-compressor #2743; `propagate_error` flag in main not in our pin). The 1-rank path completes in ~87 minutes for V4-Flash on B300. For larger MoE+MTP DSV-family architectures, expect proportionally longer; pin the `propagate_error` fix or split the calibration into resumable chunks if multi-rank is needed.
 
 **Per-layer checkpointing is enabled** (`scripts/quantize_v4_nvfp4_fp8_mtp.py` writes atomic `.tmp` + rename per sequential epoch end; resume-skip if checkpoint exists). If the run dies, restart same command — completed layers skip cleanly.
 
 **Phase 2b gate:** artifact dir contains
-- ~35 safetensors shards (V4-Flash; V4-Pro proportionally larger)
+- ~35 safetensors shards (V4-Flash)
 - `model.safetensors.index.json` with ~134,000 keys
 - 256 unique expert IDs in `weight_map` keys matching `re:.*ffn\.experts\.\d+\..*`
 - ~799 keys matching `re:^mtp\..*`
@@ -353,7 +351,7 @@ Upload via `huggingface-cli upload canada-quant/DeepSeek-V4-Flash-NVFP4-FP8-MTP`
 
 ## 7. Gotchas catalog (the 12 things that broke, in order of discovery)
 
-For each: symptom, root cause, fix. Captured exhaustively because DSV4 Pro will likely re-encounter most of them.
+For each: symptom, root cause, fix. Captured exhaustively because larger MoE+MTP architectures will likely re-encounter most of them.
 
 1. **`mtp.*` silent drop at load** — symptom: artifact has zero `mtp.*` keys. Cause: transformers `_keys_to_ignore_on_load_unexpected`. Fix: §4.1 patch.
 
@@ -365,7 +363,7 @@ For each: symptom, root cause, fix. Captured exhaustively because DSV4 Pro will 
 
 5. **Multi-rank save rank-0-only gate drops experts on other ranks** — symptom: artifact contains only ranks-0 experts. Cause: original wrapper only invokes save on rank 0. Fix: rewrite wrapper to save per-rank subdir, then rank-0 merges + writes unified index. Logic in `_CompatModel.save_pretrained` + `scripts/merge_rank_subdirs.py`. Atomic `.tmp` + rename throughout.
 
-6. **8-rank cache-offload deadlock at samples ≥ 256** — symptom: calibration completes layers but hangs on cache rotation. Cause: cache-offload error propagation missing (`propagate_error` added in llm-compressor PR #2008, not in our pin). Fix: pivoted to 1-rank for V4-Flash. Filed: llm-compressor #2743. For DSV4 Pro, pin the `propagate_error` fix to enable multi-rank.
+6. **8-rank cache-offload deadlock at samples ≥ 256** — symptom: calibration completes layers but hangs on cache rotation. Cause: cache-offload error propagation missing (`propagate_error` added in llm-compressor PR #2008, not in our pin). Fix: pivoted to 1-rank for V4-Flash. Filed: llm-compressor #2743. For larger MoE architectures, pin the `propagate_error` fix to enable multi-rank.
 
 7. **MTP inference-tensor crash at sequential_epoch_end** — symptom: at subgraph 44 (the MTP block), `RuntimeError: Inplace update to inference tensor outside InferenceMode`. Cause: upstream's MTP block uses `inference_mode()` around shared-embed; quant writeback hits this. Fix: Option Y — add `r"re:.*mtp\..*"` to recipe `ignore`. Filed: llm-compressor #2745.
 
@@ -379,7 +377,7 @@ For each: symptom, root cause, fix. Captured exhaustively because DSV4 Pro will 
 
 12. **jasl/dm120 fp8_einsum 256-row mystery** — symptom: at cuda_graph capture, `RuntimeError: DeepSeek V4 fp8 einsum weight rows must be divisible by out_rank=1024, got 256`. Cause: jasl/dm120 is a sm120-optimized fork; its `fp8_einsum.py` kernel reshapes weights based on sm120-specific assumptions. Mainline vLLM has no `fp8_einsum.py`. Fix: switch serve to mainline + PR #42209.
 
-13. **vLLM mainline DSV4 expects FUSED `attn.fused_wqa_wkv` on disk** — symptom: at weight load, `KeyError: 'layers.0.attn.fused_wqa_wkv.weight_scale'`. Cause: vLLM mainline's DSV4 uses `MergedColumnParallelLinear` for `attn.fused_wqa_wkv` (merges wq_a + wkv) and `attn.compressor.fused_wkv_wgate`. Its `load_weights` `stacked_params_mapping` renames the on-disk unfused keys to the merged-Linear name at load time, but the merged Linear's `weight_scale` parameter is only allocated when the `config_groups` regex matches the FUSED prefix. Our recipe targeted UNFUSED prefixes (`wq_a|wkv`), so no scale slot existed. Fix: update `config_groups[group_0]['targets']` regex to `r"re:.*\.attn\.(fused_wqa_wkv|compressor\.fused_wkv_wgate|wq_b|wo_a|wo_b)$"`. Script: `scripts/update_config_for_fused_attn.py`. No on-disk tensor surgery needed — vLLM's load-time merger does the concat. **DSV4 Pro note:** if upstream changes the merged-Linear names again, re-check `stacked_params_mapping` in mainline `vllm/models/deepseek_v4/nvidia/model.py:load_weights` and update the regex accordingly.
+13. **vLLM mainline DSV4 expects FUSED `attn.fused_wqa_wkv` on disk** — symptom: at weight load, `KeyError: 'layers.0.attn.fused_wqa_wkv.weight_scale'`. Cause: vLLM mainline's DSV4 uses `MergedColumnParallelLinear` for `attn.fused_wqa_wkv` (merges wq_a + wkv) and `attn.compressor.fused_wkv_wgate`. Its `load_weights` `stacked_params_mapping` renames the on-disk unfused keys to the merged-Linear name at load time, but the merged Linear's `weight_scale` parameter is only allocated when the `config_groups` regex matches the FUSED prefix. Our recipe targeted UNFUSED prefixes (`wq_a|wkv`), so no scale slot existed. Fix: update `config_groups[group_0]['targets']` regex to `r"re:.*\.attn\.(fused_wqa_wkv|compressor\.fused_wkv_wgate|wq_b|wo_a|wo_b)$"`. Script: `scripts/update_config_for_fused_attn.py`. No on-disk tensor surgery needed — vLLM's load-time merger does the concat. **Forward-compat note:** if upstream changes the merged-Linear names again, re-check `stacked_params_mapping` in mainline `vllm/models/deepseek_v4/nvidia/model.py:load_weights` and update the regex accordingly.
 
 14. **W8A16Fp8 scheme `is_static_input_scheme` is `None` AssertionError** — symptom: at `process_weights_after_loading`, `assert self.is_static_input_scheme is False` fails. Cause: scheme picker passes `input_quant and not input_quant.dynamic` which short-circuits to `None` when `input_quant=None` (our weight-only attn case). Scheme stores `None`; `None is False` evaluates `False`, assertion fires. Fix: wrap with `bool(...)` in `vllm/model_executor/layers/quantization/compressed_tensors/compressed_tensors.py` at lines 679 + 700. **This is our queued upstream PR #43248** — until it merges, apply locally with `sed -i 's|is_static_input_scheme = input_quant and not input_quant.dynamic|is_static_input_scheme = bool(input_quant and not input_quant.dynamic)|g' <path>/compressed_tensors.py`.
 
@@ -437,25 +435,19 @@ For V4-Flash:
 
 ---
 
-## 11. DSV4 Pro replication deltas
+## 11. Generalizing to other MoE+MTP architectures
 
-These are the items expected to differ between V4-Flash and V4-Pro. The rest of the recipe should re-run unchanged.
+The recipe should generalize to other MoE+MTP architectures in the DSV-family with these items re-verified:
 
-| Item | V4-Flash | V4-Pro expected |
-|---|---|---|
-| BF16 source size | 568 GB | likely 800 GB – 1.5 TB |
-| Main layers | 43 | likely 60–80 |
-| Routed experts | 256 | likely 256–384 |
-| MTP layers | 1 (`mtp.0`) | likely 1, possibly 2 (`mtp.0`, `mtp.1`) — verify |
-| Calibration time (1-rank) | ~87 min | scale by parameter count |
-| Calibration time (8-rank, post-`propagate_error`) | ~12–18 min projected | scale by parameter count, ÷ 8 |
-| HF repo | DeepSeek-V4-Flash-NVFP4-FP8-MTP | DeepSeek-V4-Pro-NVFP4-FP8-MTP |
-| `num_hidden_layers` in config | 43 | match upstream's value, NOT 43 |
-| Patches §4.1, §4.2 | apply unchanged | re-verify the regex still strips `mtp.*` (may apply to Pro's modeling class too) |
-| Recipe §5 | apply unchanged | re-verify the `ignore` regex matches V4-Pro's MTP key prefix (could be `mtp.0` and `mtp.1`) |
-| Phase 5 vLLM PR | #42209 (or successor if merged) | verify still required; mainline may have absorbed it |
+| Item | What to check |
+|---|---|
+| Main layers count | Update `num_hidden_layers` in postprocess to match upstream's value (not hard-coded to 43). |
+| MTP block layout | Re-verify the `ignore` regex matches the architecture's actual MTP key prefix (could be `mtp.0`, or multiple). |
+| Modeling-class `_keys_to_ignore_on_load_unexpected` | §4.1 patch may need to target a different class name. |
+| Calibration time | Scale by parameter count; 1-rank time on V4-Flash is ~87 min on B300. |
+| vLLM PR #42209 | Verify still required; mainline may have absorbed it. |
 
-The most important thing for V4-Pro is: **run Phase 0–4 first on a small sample (e.g., layer 5 only) before committing to a multi-hour Phase 2b run**. The patches and the recipe shape are stable; what's likely to vary is the modeling class name, the MTP block layout, and the per-layer parameter count budget.
+The most important thing: **run Phase 0–4 first on a small sample (e.g., layer 5 only) before committing to a multi-hour Phase 2b run**. The patches and the recipe shape are stable; what's likely to vary is the modeling class name, the MTP block layout, and the per-layer parameter count budget.
 
 ---
 
@@ -463,7 +455,7 @@ The most important thing for V4-Pro is: **run Phase 0–4 first on a small sampl
 
 This recipe is **load-bearing**. When something in it goes out of date, update it the same day:
 - Upstream PR merges (§4.3, §4.4, §9) — update status; if a PR merged, mark obsolete in our patches.
-- New gotchas discovered during V4-Pro replication — add to §7 with discovery date.
+- New gotchas discovered during replication on related architectures — add to §7 with discovery date.
 - Recipe parameter changes (e.g., `samples`, `group_size`) — update §5 and document the reason.
 - Memory entries created or updated — cross-reference here.
 
