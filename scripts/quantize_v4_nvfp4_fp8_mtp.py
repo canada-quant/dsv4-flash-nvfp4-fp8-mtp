@@ -378,9 +378,24 @@ def build_nvfp4_recipe(dry_run_one_layer: bool):
         attn_targets = [r"re:.*\.layers\.5\.attn\.(wq_a|wq_b|wkv|wo_a|wo_b)$"]
         expert_targets = [r"re:.*\.layers\.5\.ffn\.experts\.\d+\.(w1|w2|w3)$"]
     else:
+        # NOTE: MTP layer's e_proj/h_proj are intentionally omitted from
+        # attn_targets here. Calibrating the MTP block triggers a
+        # `RuntimeError: Inplace update to inference tensor outside
+        # InferenceMode is not allowed` at sequential_epoch_end → qparam
+        # writeback (almost certainly because the MTP forward path in the
+        # vendored upstream model creates some tensors under inference_mode
+        # — the shared embedding lookup is the prime suspect). 2026-05-21
+        # 1-rank run reached subgraph 43/45 cleanly then died at
+        # subgraph 44 (the MTP block).
+        #
+        # Pragmatic shipping plan: skip MTP quantization. MTP weights stay
+        # BF16, get written to the artifact verbatim, and load cleanly in
+        # vLLM with --speculative_config method=mtp. The differentiator
+        # vs RedHat (MTP weights PRESENT vs ABSENT) is preserved.
+        # Cost: MTP layer ~few hundred MB BF16 instead of FP8.
+        # Upstream bug to file separately.
         attn_targets = [
             r"re:.*\.attn\.(wq_a|wq_b|wkv|wo_a|wo_b)$",
-            r"re:.*mtp\.\d+\.(e_proj|h_proj)$",
         ]
         expert_targets = [r"re:.*\.ffn\.experts\.\d+\.(w1|w2|w3)$"]
 
@@ -407,6 +422,8 @@ def build_nvfp4_recipe(dry_run_one_layer: bool):
             r"re:hc_.*",
             r"re:.*\.attn\.attn_sink$",
             r"re:.*\.attn\.(compressor|indexer)\..*",
+            # Skip ALL MTP modules (see attn_targets comment above)
+            r"re:.*mtp\..*",
         ],
     )
 
