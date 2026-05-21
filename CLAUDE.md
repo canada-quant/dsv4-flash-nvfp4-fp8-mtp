@@ -8,7 +8,7 @@ This repo produces the **first** DeepSeek-V4-Flash NVFP4-FP8 quantization that *
 
 **Topology decisions:**
 - **Quantization scheme:** `NVFP4` on routed MoE experts (group_size=16, tensor_group, FP8 e4m3 scales). `FP8_BLOCK` 128×128 on attention Linears + MTP `e_proj`/`h_proj`. Recipe matches RedHat's V4-Flash NVFP4-FP8 *exactly* on the math; the only delta is MTP retention.
-- **Hardware:** Blackwell B300 (SM 10.0a). NVFP4 has hardware tensor-core support. This is the right box for this format.
+- **Hardware:** Blackwell B300 SXM6 AC, **compute_cap 10.3 (sm_103a)** — verified 2026-05-21 via `nvidia-smi --query-gpu=compute_cap` and `torch.cuda.get_device_capability(0) == (10, 3)`. NOT sm_100a as the original handoff claimed. NVFP4 has hardware tensor-core support. **Build vLLM with `TORCH_CUDA_ARCH_LIST=10.3a`** — sm_100a binaries don't run on sm_103a (the `a` suffix is non-portable arch-family-specific). The whole Phase 5a session was chasing wrong-arch kernels because we trusted the docs over `nvidia-smi`.
 - **Distributed:** multi-rank torchrun is expected to work because `QuantizationModifier` has zero `dist.*` calls in its main file (verified). NCCL hangs we saw on `GPTQModifier._reduce_hessian_to_target_rank` are GPTQ-specific. **STILL VERIFY** with a 4-rank dryrun before launching full 8-rank (observer code or compressed_tensors internals could still have collectives).
 
 ## Why a new repo

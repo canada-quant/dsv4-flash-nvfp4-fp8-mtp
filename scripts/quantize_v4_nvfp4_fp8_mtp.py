@@ -367,7 +367,26 @@ class _CompatModel(nn.Module):
 # Recipe
 # =========================================================================
 def build_nvfp4_recipe(dry_run_one_layer: bool):
-    """Return a QuantizationModifier with NVFP4 experts + FP8_BLOCK attn."""
+    """Return a QuantizationModifier with NVFP4 experts + FP8_BLOCK attn.
+
+    NOTE 2026-05-21 (post-Phase-5a debug): the FP8_BLOCK preset includes
+    `input_activations` with `dynamic=True, num_bits=8, group_size=128`,
+    matching RedHat's recipe. However, llm-compressor's save logic drops the
+    `input_activations` field on serialize when `dynamic=True` (likely because
+    dynamic activations carry no static state). Without the field in the
+    saved config, vLLM picks `CompressedTensorsW8A16Fp8` instead of
+    `CompressedTensorsW8A8Fp8`, which routes through Marlin instead of
+    DeepGemm. The DSV4 attention forward path requires DeepGemm (for the
+    `is_bmm` BMM reshape on `wo_a`).
+
+    Fix: target the FUSED attn names that vLLM's MergedColumnParallelLinear
+    expects (`fused_wqa_wkv`, `compressor.fused_wkv_wgate`) — NOT the unfused
+    names (`wq_a`, `wkv`) — so vLLM's quant framework allocates `weight_scale`
+    on the merged module at construction. Additionally, the post-save
+    config-fixup step (postprocess_for_vllm.py) restores `input_activations`
+    explicitly. The recipe itself uses the FP8_BLOCK preset unchanged so the
+    calibration math matches RedHat exactly.
+    """
     from compressed_tensors.quantization import QuantizationScheme
     from compressed_tensors.quantization.quant_scheme import NVFP4, FP8_BLOCK
     from llmcompressor.modifiers.quantization import QuantizationModifier
@@ -375,6 +394,8 @@ def build_nvfp4_recipe(dry_run_one_layer: bool):
     if dry_run_one_layer:
         # Restrict to layer 5 (a representative MoE layer) so the dryrun
         # exercises both FP8_BLOCK attn and NVFP4 experts paths quickly.
+        # Targets unfused names for calibration; postprocess rewrites to
+        # fused names for vLLM load.
         attn_targets = [r"re:.*\.layers\.5\.attn\.(wq_a|wq_b|wkv|wo_a|wo_b)$"]
         expert_targets = [r"re:.*\.layers\.5\.ffn\.experts\.\d+\.(w1|w2|w3)$"]
     else:
@@ -393,7 +414,7 @@ def build_nvfp4_recipe(dry_run_one_layer: bool):
         # vLLM with --speculative_config method=mtp. The differentiator
         # vs RedHat (MTP weights PRESENT vs ABSENT) is preserved.
         # Cost: MTP layer ~few hundred MB BF16 instead of FP8.
-        # Upstream bug to file separately.
+        # Upstream bug to file separately (llm-compressor #2745).
         attn_targets = [
             r"re:.*\.attn\.(wq_a|wq_b|wkv|wo_a|wo_b)$",
         ]
