@@ -9,7 +9,7 @@ Full model card with TL;DR, benchmarks, throughput, and honest limitations lives
 | Repo | HF model card | Role |
 |---|---|---|
 | **this repo** (`dsv4-flash-nvfp4-fp8-mtp`) | [NVFP4-FP8-MTP](https://huggingface.co/canada-quant/DeepSeek-V4-Flash-NVFP4-FP8-MTP) | NVFP4 routed experts + MTP, Blackwell-native (B300 / RTX PRO 6000) |
-| [`canada-quant/dsv4-flash-w4a16-fp8-mtp`](https://github.com/canada-quant/dsv4-flash-w4a16-fp8-mtp) | [W4A16-FP8-MTP](https://huggingface.co/canada-quant/DeepSeek-V4-Flash-W4A16-FP8-MTP) | sibling — W4A16 routed experts (Hopper-compatible), same MTP-retention pattern |
+| [`canada-quant/dsv4-flash-w4a16-fp8-mtp`](https://github.com/canada-quant/dsv4-flash-w4a16-fp8-mtp) | [W4A16-FP8-MTP](https://huggingface.co/canada-quant/DeepSeek-V4-Flash-W4A16-FP8-MTP) | sibling — W4A16 routed experts (Hopper-compatible), same MTP-retention pattern. **SM 12.0 / RTX PRO 6000 deployments doing batched thinking-mode**: use this NVFP4 repo instead — the W4A16 Marlin MoE decode path corrupts ~50% of long thinking generations under concurrent load. See [debug log](https://github.com/canada-quant/dsv4-flash-w4a16-fp8-mtp/blob/main/docs/findings/sm12x_token_corruption_2026_05_24.md) and [`jasl/vllm#12`](https://github.com/jasl/vllm/issues/12). |
 | [`canada-quant/dsv4-flash-w4a16-fp8`](https://github.com/canada-quant/dsv4-flash-w4a16-fp8) | [W4A16-FP8](https://huggingface.co/canada-quant/DeepSeek-V4-Flash-W4A16-FP8) | predecessor (no-MTP baseline) — broadest hardware compatibility |
 | [`canada-quant/dsv4-pro-nvfp4-fp8-mtp`](https://github.com/canada-quant/dsv4-pro-nvfp4-fp8-mtp) | [Pro NVFP4-FP8-MTP](https://huggingface.co/canada-quant/DeepSeek-V4-Pro-NVFP4-FP8-MTP) | larger sibling — V4-Pro NVFP4 + MTP, B300-only |
 
