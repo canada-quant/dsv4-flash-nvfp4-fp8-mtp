@@ -104,6 +104,27 @@ CUDA_HOME=/usr/local/cuda VLLM_TEST_FORCE_FP8_MARLIN=1 \
   --kv-cache-dtype fp8
 ```
 
+## Also runs on RTX PRO 6000 Blackwell (SM 12.0)
+
+The headline numbers above are measured on B300 (SM 10.3). The same artifact also serves on **NVIDIA RTX PRO 6000 Blackwell Server Edition** (SM 12.0, 96 GiB HBM per GPU) — the more accessible consumer/server Blackwell SKU.
+
+Validated 2026-05-23 on a 4× RTX PRO 6000 Blackwell box. Both TP=2 and TP=4 work with CUDA graphs enabled (no `--enforce-eager`). Same artifact, same `--kv-cache-dtype fp8 --speculative-config '{"method":"mtp","num_speculative_tokens":1}'` (SM 12.0 caps spec at `k=1`).
+
+| Config | bs=1 out tok/s | bs=4 out tok/s | bs=16 out tok/s | bs=1 TPOT median | MTP acceptance | GSM8K-50 strict |
+|---|---|---|---|---|---|---|
+| RTX 6000 Pro, TP=2, MTP on | 94.6 | 218.5 | 360.5 | 9.05 ms | 70–73% | 88% |
+| RTX 6000 Pro, TP=4, MTP on | 101.0 | 254.0 | 440.1 | 8.20 ms | 67–75% | 90% |
+
+Per-replica numbers, single-replica run, `vllm bench serve` random 256-in/256-out, `num_speculative_tokens=1`. The W4A16+FP8+MTP sibling on the same box measured 98.83 tok/s at TP=2 bs=1 — the two artifacts deliver equivalent decode throughput on this hardware, with NVFP4 trading ~4% per-replica throughput for ~10% smaller on-disk footprint (172 GB vs 159 GB).
+
+Three SM 12.0-specific vLLM patches are required beyond the four common patches listed in [`docs/VLLM_SETUP_ISSUES.md`](https://github.com/canada-quant/dsv4-flash-nvfp4-fp8-mtp/blob/main/docs/VLLM_SETUP_ISSUES.md):
+
+1. `VLLM_TEST_FORCE_FP8_MARLIN=1` to bypass the NVFP4 MoE backend selector's `swiglu_limit` filter (no `FLASHINFER_TRTLLM` NVFP4 kernel auto-selects on SM 12.0)
+2. `weight_scale_inv`-or-`weight_scale` fallback in Marlin's `scaled_mm/marlin.py` (the existing `wo_a` fallback in `attention.py` doesn't cover this site)
+3. Skip Marlin pre-processing for layers tagged `is_bmm=True` (DSV4 `wo_a`/`wo_b`/`compressor.wkv` use the SM 12.0 Triton `fp8_einsum` kernel directly; Marlin's tile-layout repack breaks it)
+
+Full recipe + patch diffs in [`docs/RECIPE_RTX6000PRO.md`](https://github.com/canada-quant/dsv4-flash-nvfp4-fp8-mtp/blob/main/docs/RECIPE_RTX6000PRO.md). Raw bench JSONs in `benchmarks/rtx6000pro/`.
+
 ## Differences vs RedHat's NVFP4-FP8 artifact
 
 | Aspect | `RedHatAI/DeepSeek-V4-Flash-NVFP4-FP8` | This artifact |

@@ -1,0 +1,39 @@
+--- a/vllm/model_executor/kernels/linear/scaled_mm/marlin.py
++++ b/vllm/model_executor/kernels/linear/scaled_mm/marlin.py
+@@ -70,12 +70,21 @@ class CompressedTensorsLinearMethodMarlin(Fp8ScaledMMLinearKernel):
+
+     def process_weights_after_loading(self, layer: torch.nn.Module) -> None:
+         if self.block_quant:
++            # PATCH (paul/dsv4) marlin scale_inv fallback: compressed-tensors
++            # NVFP4-FP8 mixed-precision artifacts save FP8_BLOCK scales as
++            # `weight_scale` (no _inv suffix). Accept either, write back to
++            # whichever attribute the layer has.
++            ws = getattr(layer, "weight_scale_inv", None)
++            if ws is None:
++                ws = layer.weight_scale
+             weight, weight_scale_inv = process_fp8_weight_block_strategy(
+-                layer.weight, layer.weight_scale_inv
++                layer.weight, ws
+             )
+-            # Update layer with new values
+             replace_parameter(layer, "weight", weight.data)
+-            replace_parameter(layer, "weight_scale_inv", weight_scale_inv.data)
++            target = (
++                "weight_scale_inv" if hasattr(layer, "weight_scale_inv") else "weight_scale"
++            )
++            replace_parameter(layer, target, weight_scale_inv.data)
+         else:
+             w_q, *_ = self._get_layer_params(layer)
+             # Compressed tensors transposes the weight to (K, N)
+@@ -107,7 +116,11 @@ class CompressedTensorsLinearMethodMarlin(Fp8ScaledMMLinearKernel):
+         bias: torch.Tensor | None = None,
+     ) -> torch.Tensor:
+         if self.block_quant:
+-            weight_scale = layer.weight_scale_inv
++            # PATCH (paul/dsv4) marlin scale_inv fallback (read site).
++            weight_scale = getattr(layer, "weight_scale_inv", None)
++            if weight_scale is None:
++                weight_scale = layer.weight_scale
+         else:
+             weight_scale = layer.weight_scale
+         return apply_fp8_marlin_linear(

@@ -109,6 +109,32 @@ loading fails the same way. Drops the reasoning-agent's old global
 lines 357-389 already chooses the right suffix per expert dtype, so the
 global rename would now break FP8 expert handling. Idempotent.
 
+### `sm120_marlin_scale_inv_fallback.diff` (SM 12.0 / RTX PRO 6000 only)
+Adds the `weight_scale_inv`-or-`weight_scale` fallback to Marlin's
+`scaled_mm/marlin.py` in two places (the block-quant write site at line
+73 and the read site at line 110-111). The B300 path doesn't need this
+because the existing #43290 patch on `vllm/models/deepseek_v4/attention.py`
+covers the wo_a forward call site; SM 12.0 takes a different code path
+that goes through Marlin's pre-processing, which the existing patch
+doesn't reach. Not yet filed upstream — same defensive pattern as
+PR #43290, low-risk to merge.
+
+### `sm120_skip_marlin_for_bmm.diff` (SM 12.0 / RTX PRO 6000 only)
+Patches `vllm/model_executor/layers/quantization/compressed_tensors/schemes/compressed_tensors_w8a8_fp8.py`
+to bypass Marlin's `process_weights_after_loading` for layers tagged
+`is_bmm=True`. On SM 12.0, DSV4's `wo_a`/`wo_b`/`compressor.wkv` are
+called via a custom Triton `fp8_einsum` kernel that needs the original
+`(N, K)` FP8 layout. Marlin's tile repack breaks that path (symptom:
+`fp8 einsum weight rows must be divisible by out_rank=1024, got 256` —
+where 256 is the Marlin tile row count). Skipping the repack lets the
+einsum kernel see the raw weight directly. Not yet filed upstream — the
+right long-term fix may be to give bmm layers a different `quant_method`
+entirely; the runtime branch is a pragmatic intermediate.
+
+See [`docs/RECIPE_RTX6000PRO.md`](../docs/RECIPE_RTX6000PRO.md) for the
+full SM 12.0 recipe including the `VLLM_TEST_FORCE_FP8_MARLIN=1`
+workaround for the NVFP4 MoE backend selector.
+
 ## CUDA toolkit on the DLAMI
 
 The DLAMI's `/opt/pytorch/cuda` is a **runtime-only** install — fine for
