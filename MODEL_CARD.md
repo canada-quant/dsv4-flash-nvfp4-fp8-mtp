@@ -25,9 +25,18 @@ A DeepSeek-V4-Flash NVFP4-FP8 quantization that retains the MTP (multi-token-pre
 
 That last point is the only structural difference from RedHat's artifact. The HF transformers DSV4 modeling class has `_keys_to_ignore_on_load_unexpected = [r"(^|\.)mtp\..*"]`, which silently strips MTP keys during the calibration load path. RedHat's artifact ran through that path, so their saved weights don't include MTP. Ours include MTP because we patched the modeling class during calibration.
 
-## Headline measurements
+## Hardware validated
 
-All numbers measured 2026-05-21 on 4× B300 SXM6 AC (compute_cap 10.3). Quant configs at TP=4, BF16 reference at TP=8 (it doesn't fit at TP=4 on B300). Same prompts, same temperature 0, chat template applied server-side.
+| Platform | Compute cap | HBM per GPU | Interconnect | Status |
+|---|---|---|---|---|
+| 4× NVIDIA B300 SXM6 AC | SM 10.3 (`sm_103a`) | 288 GB HBM3e | NVLink | Primary — all accuracy + throughput numbers below |
+| 4× NVIDIA RTX PRO 6000 Blackwell Server Edition | SM 12.0 (`sm_120`) | 96 GB HBM | PCIe | Also validated — TP=2/TP=4 throughput + GSM8K-50, 3 extra vLLM patches |
+
+Both platforms serve with CUDA graphs enabled (no `--enforce-eager`). Throughput tables below break out per-platform.
+
+## Accuracy (model quality, hardware-invariant)
+
+Measured 2026-05-21 on 4× B300 SXM6 AC (TP=4 for quant configs, TP=8 for BF16 reference which doesn't fit at TP=4). Same prompts, temperature 0, chat template server-side. The same artifact serves on RTX PRO 6000 Blackwell with no weight changes — accuracy reproduces (GSM8K-50 cross-check: 88% strict TP=2 / 90% strict TP=4 on RTX 6000 Pro vs 91.81% strict full-set on B300, within noise).
 
 | Benchmark | This artifact | BF16 + MTP reference | RedHat (no MTP) |
 |---|---|---|---|
@@ -44,25 +53,42 @@ All numbers measured 2026-05-21 on 4× B300 SXM6 AC (compute_cap 10.3). Quant co
 
 On raw AIME pass@1, RedHat scores higher than ours (90% vs 83%) — but the gap is **entirely truncation rate** at the 65K max_tokens cap (RedHat truncated 2/30, ours truncated 5/30). On non-truncated pass@1 — the problems where both completed reasoning — all three configs are within 0.4pt of each other (96.0–96.4%). Quantization quality is equivalent across configs on AIME 2024 in this measurement; the differentiator is wall-clock.
 
-## Wall-clock vs RedHat
+## Throughput
 
-Same 4× B300 hardware, same TP=4, same prompts:
+### 4× B300 SXM6 (SM 10.3, NVLink, TP=4)
 
-| Workload | Operating point | This artifact | RedHat |
-|---|---|---|---|
-| AIME 2024 reasoning (thinking=high, c=8) | wall-clock for 30 problems | 476s | 1405s |
-| AIME 2024 reasoning | per-request median tok/s | 182.9 | 99.6 |
-| Coding (HumanEval chat, c=1) | output tok/s | 278.68 | 131.06 |
-| Coding (HumanEval chat, c=4) | output tok/s | 649.35 | 417.87 |
-| Coding (HumanEval chat, c=8) | output tok/s | 1104.89 | 673.12 |
-| Coding (HumanEval chat, c=16) | output tok/s | 1577.20 | 1007.78 |
+Same hardware, same TP=4, same prompts as the accuracy table above.
+
+| Workload | Operating point | This artifact | RedHat | Ratio |
+|---|---|---|---|---|
+| AIME 2024 reasoning (thinking=high, c=8) | wall-clock for 30 problems | 476s | 1405s | 2.95× |
+| AIME 2024 reasoning | per-request median tok/s | 182.9 | 99.6 | 1.84× |
+| Coding (HumanEval chat, c=1) | output tok/s | 278.68 | 131.06 | 2.13× |
+| Coding (HumanEval chat, c=4) | output tok/s | 649.35 | 417.87 | 1.55× |
+| Coding (HumanEval chat, c=8) | output tok/s | 1104.89 | 673.12 | 1.64× |
+| Coding (HumanEval chat, c=16) | output tok/s | 1577.20 | 1007.78 | 1.56× |
 
 Two different ratios to disambiguate:
 
 - **Pure decode throughput**: at c=1 chat coding, ours is 2.13× faster. On AIME reasoning at c=8, the per-request median decode rate is 182.9 vs 99.6 tok/s — a **1.84×** decode speedup. The decode ratio is workload-dependent (acceptance % varies) but lands in the 1.8–2.1× range across the workloads measured.
 - **AIME batch wall-clock**: 1405s / 476s = **2.95×**. This includes the truncation-rate differential at the 65K max_tokens cap: 5/30 of our responses truncated vs 2/30 of RedHat's, and truncated responses run to the cap, inflating RedHat's total wall-clock. The 2.95× ratio measures "time to run AIME 2024 end-to-end" rather than pure decode speed, and is the right number to cite for "how long does the bench take" but not for "how fast does the model decode."
 
-## MTP draft acceptance per workload
+### 4× RTX PRO 6000 Blackwell (SM 12.0, PCIe, TP=2 and TP=4)
+
+Validated 2026-05-23 on a Brev `familiar-teal-worm` instance. Per-replica `vllm bench serve` random 256-in/256-out, `num_speculative_tokens=1` (SM 12.0 caps spec at k=1). MTP-on for all rows.
+
+| Config | bs=1 out tok/s | bs=4 out tok/s | bs=16 out tok/s | bs=1 TPOT median | MTP acceptance | GSM8K-50 strict |
+|---|---|---|---|---|---|---|
+| TP=2 | 94.6 | 218.5 | 360.5 | 9.05 ms | 70–73% | 88% |
+| TP=4 | 101.0 | 254.0 | 440.1 | 8.20 ms | 67–75% | 90% |
+
+At bs=16, TP=4 is 1.22× faster per-replica than TP=2 on this hardware — opposite of B300, where TP=4 beats TP=8 due to NVFP4 tensor-core underutilization. RTX PRO 6000's slower PCIe interconnect plus lower per-GPU compute means the extra parallelism still pays off at all batch sizes measured.
+
+For context on the same RTX PRO 6000 box, the W4A16+FP8+MTP sibling measured 98.83 tok/s at TP=2 bs=1 — the two artifacts deliver equivalent decode throughput on this hardware, with NVFP4 trading ~4% per-replica throughput for ~10% smaller on-disk footprint (172 GB vs 159 GB).
+
+Three SM 12.0-specific vLLM patches are required beyond the four common patches below. Recipe + diffs in [`docs/RECIPE_RTX6000PRO.md`](https://github.com/canada-quant/dsv4-flash-nvfp4-fp8-mtp/blob/main/docs/RECIPE_RTX6000PRO.md). Raw bench JSONs in `benchmarks/rtx6000pro/`.
+
+### MTP draft acceptance per workload (B300)
 
 | Workload | Acceptance |
 |---|---|
@@ -73,11 +99,12 @@ Two different ratios to disambiguate:
 | Instruction following (IFEval) | ~58.5% |
 | AIME 2024 reasoning (thinking=high) | 81.60% |
 
-Acceptance does not degrade under batching — flat at 88.0% ± 0.4% across c=1 to c=16 on chat-templated coding.
+Acceptance does not degrade under batching — flat at 88.0% ± 0.4% across c=1 to c=16 on chat-templated coding. RTX PRO 6000 acceptance lands in the 67–75% range on random prompts (256-in/256-out workload, not directly comparable to the workload-specific rows above).
 
 ## Recommended serving config
 
-TP=4 on 4× B300 SXM6 (288 GB HBM3e per GPU). On this artifact, TP=8 is **slower** than TP=4 at c≥4 batched concurrencies — by up to 21.6% at c=16. Per-rank MoE expert shards at TP=8 are small enough to underutilize NVFP4 tensor-core kernels on B300. TP=4 is the right operating point for this artifact in production.
+- **B300 (288 GB HBM3e, NVLink)**: TP=4. TP=8 is slower than TP=4 at c≥4 by up to 21.6% at c=16 — per-rank MoE expert shards at TP=8 are small enough to underutilize NVFP4 tensor-core kernels on B300.
+- **RTX PRO 6000 Blackwell (96 GB HBM, PCIe)**: TP=4 with reduced cudagraph captures + `--max-num-seqs 8 --max-num-batched-tokens 2048` to fit memory. TP=2 also works if only 2 GPUs are available; expect 1.22× lower per-replica throughput at bs=16.
 
 ## Quick start
 
@@ -103,27 +130,6 @@ CUDA_HOME=/usr/local/cuda VLLM_TEST_FORCE_FP8_MARLIN=1 \
   --tensor-parallel-size 4 \
   --kv-cache-dtype fp8
 ```
-
-## Also runs on RTX PRO 6000 Blackwell (SM 12.0)
-
-The headline numbers above are measured on B300 (SM 10.3). The same artifact also serves on **NVIDIA RTX PRO 6000 Blackwell Server Edition** (SM 12.0, 96 GiB HBM per GPU) — the more accessible consumer/server Blackwell SKU.
-
-Validated 2026-05-23 on a 4× RTX PRO 6000 Blackwell box. Both TP=2 and TP=4 work with CUDA graphs enabled (no `--enforce-eager`). Same artifact, same `--kv-cache-dtype fp8 --speculative-config '{"method":"mtp","num_speculative_tokens":1}'` (SM 12.0 caps spec at `k=1`).
-
-| Config | bs=1 out tok/s | bs=4 out tok/s | bs=16 out tok/s | bs=1 TPOT median | MTP acceptance | GSM8K-50 strict |
-|---|---|---|---|---|---|---|
-| RTX 6000 Pro, TP=2, MTP on | 94.6 | 218.5 | 360.5 | 9.05 ms | 70–73% | 88% |
-| RTX 6000 Pro, TP=4, MTP on | 101.0 | 254.0 | 440.1 | 8.20 ms | 67–75% | 90% |
-
-Per-replica numbers, single-replica run, `vllm bench serve` random 256-in/256-out, `num_speculative_tokens=1`. The W4A16+FP8+MTP sibling on the same box measured 98.83 tok/s at TP=2 bs=1 — the two artifacts deliver equivalent decode throughput on this hardware, with NVFP4 trading ~4% per-replica throughput for ~10% smaller on-disk footprint (172 GB vs 159 GB).
-
-Three SM 12.0-specific vLLM patches are required beyond the four common patches listed in [`docs/VLLM_SETUP_ISSUES.md`](https://github.com/canada-quant/dsv4-flash-nvfp4-fp8-mtp/blob/main/docs/VLLM_SETUP_ISSUES.md):
-
-1. `VLLM_TEST_FORCE_FP8_MARLIN=1` to bypass the NVFP4 MoE backend selector's `swiglu_limit` filter (no `FLASHINFER_TRTLLM` NVFP4 kernel auto-selects on SM 12.0)
-2. `weight_scale_inv`-or-`weight_scale` fallback in Marlin's `scaled_mm/marlin.py` (the existing `wo_a` fallback in `attention.py` doesn't cover this site)
-3. Skip Marlin pre-processing for layers tagged `is_bmm=True` (DSV4 `wo_a`/`wo_b`/`compressor.wkv` use the SM 12.0 Triton `fp8_einsum` kernel directly; Marlin's tile-layout repack breaks it)
-
-Full recipe + patch diffs in [`docs/RECIPE_RTX6000PRO.md`](https://github.com/canada-quant/dsv4-flash-nvfp4-fp8-mtp/blob/main/docs/RECIPE_RTX6000PRO.md). Raw bench JSONs in `benchmarks/rtx6000pro/`.
 
 ## Differences vs RedHat's NVFP4-FP8 artifact
 
@@ -153,7 +159,9 @@ The 64-sample recipe was used due to time/compute constraints during initial bri
 
 ## vLLM patches required
 
-The artifact loads on vLLM mainline + these 5 patches. They're filed upstream and waiting on review. See [`docs/VLLM_SETUP_ISSUES.md`](https://github.com/canada-quant/dsv4-flash-nvfp4-fp8-mtp/blob/main/docs/VLLM_SETUP_ISSUES.md) for the exact diffs.
+### Common (all platforms, B300 + RTX PRO 6000)
+
+The artifact loads on vLLM mainline + these 4 patches. They're filed upstream and waiting on review. See [`docs/VLLM_SETUP_ISSUES.md`](https://github.com/canada-quant/dsv4-flash-nvfp4-fp8-mtp/blob/main/docs/VLLM_SETUP_ISSUES.md) for the exact diffs.
 
 1. PR [#43248](https://github.com/vllm-project/vllm/pull/43248) — `bool()` wrap on `is_static_input_scheme`
 2. PR [#43288](https://github.com/vllm-project/vllm/pull/43288) — `.get("scale_fmt", "ue8m0")` on missing key + BF16 `getattr` follow-up
@@ -161,6 +169,16 @@ The artifact loads on vLLM mainline + these 5 patches. They're filed upstream an
 4. PR [#43319](https://github.com/vllm-project/vllm/pull/43319) — MTP-quant-detect from safetensors header + BF16 `wo_a` fallback path
 
 The one-line installer applies all four automatically.
+
+### Additional (RTX PRO 6000 Blackwell / SM 12.0 only)
+
+Three SM 12.0-specific patches are required on top of the four above. Not yet filed upstream — diffs are in `patches/sm120_*.diff` in the source repo, full rationale in [`docs/RECIPE_RTX6000PRO.md`](https://github.com/canada-quant/dsv4-flash-nvfp4-fp8-mtp/blob/main/docs/RECIPE_RTX6000PRO.md).
+
+1. `VLLM_TEST_FORCE_FP8_MARLIN=1` env var — bypasses the NVFP4 MoE backend selector's `swiglu_limit` filter (no `FLASHINFER_TRTLLM` NVFP4 kernel auto-selects on SM 12.0).
+2. `weight_scale_inv`-or-`weight_scale` fallback in Marlin's `scaled_mm/marlin.py` (the PR #43290 patch covers `attention.py` only; SM 12.0 also hits Marlin's pre-process site).
+3. Skip Marlin pre-processing for layers tagged `is_bmm=True` — DSV4 `wo_a`/`wo_b`/`compressor.wkv` use the SM 12.0 Triton `fp8_einsum` kernel directly; Marlin's tile-layout repack breaks the original `(N, K)` layout the einsum expects.
+
+B300 deployments can skip all three.
 
 ## Files in the artifact
 
