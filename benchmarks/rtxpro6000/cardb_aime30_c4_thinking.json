@@ -1,0 +1,369 @@
+{
+  "meta": {
+    "timestamp_utc": "2026-05-25T03:54:43.209105+00:00",
+    "dataset": "Maxwell-Jia/AIME_2024",
+    "model": "DSV4-NVFP4-FP8-MTP",
+    "concurrency": 4,
+    "max_tokens": 10000,
+    "thinking": true,
+    "n": 30
+  },
+  "totals": {
+    "correct": 21,
+    "errors": 0,
+    "wallclock_s": 386.5529534816742,
+    "finish_reasons": {
+      "stop": 20,
+      "length": 10
+    }
+  },
+  "mtp_delta": {
+    "d_drafts": 87939.0,
+    "d_draft_tokens": 87939.0,
+    "d_accepted_tokens": 79963.0,
+    "acceptance_rate": 0.9093007653032216,
+    "tokens_per_step": 1.9093007653032217
+  },
+  "pre_metrics": {
+    "drafts": 211656.0,
+    "draft_tokens": 211656.0,
+    "accepted_tokens": 191925.0
+  },
+  "post_metrics": {
+    "drafts": 299595.0,
+    "draft_tokens": 299595.0,
+    "accepted_tokens": 271888.0
+  },
+  "results": [
+    {
+      "id": "2024-II-4",
+      "expected": 33,
+      "pred": 33,
+      "correct": true,
+      "finish": "stop",
+      "completion_tokens": 1881,
+      "prompt_tokens": 165,
+      "elapsed_s": 18.411935329437256,
+      "gen_tail": "*(y/(xz))*(z/(xy)) = (xyz)/(x^2 y^2 z^2) = 1/(xyz) = sqrt(2)*2^{1/3}*2^{1/4} = 2^{1/2+1/3+1/4} = 2^{(6+4+3)/12}=2^{13/12}. So 1/(xyz)=2^{13/12} => xyz = 2^{-13/12}. Then we can find x^4 y^3 z^2 = (xyz)^? Not directly. But we can also find individual logs. Our linear method is fine.\n\nThus answer: 33."
+    },
+    {
+      "id": "2024-II-12",
+      "expected": 23,
+      "pred": 23,
+      "correct": true,
+      "finish": "stop",
+      "completion_tokens": 4881,
+      "prompt_tokens": 186,
+      "elapsed_s": 45.96771860122681,
+      "gen_tail": "ut wait: Check if any other point on AB might also be on the envelope? The envelope is the astroid, and AB is a line that is tangent to the astroid at exactly one point (since it's a tangent line). So only that point is on the envelope. So indeed unique. So answer 23.\n\nThus final answer: \\boxed{23}."
+    },
+    {
+      "id": "2024-I-4",
+      "expected": 116,
+      "pred": 116,
+      "correct": true,
+      "finish": "stop",
+      "completion_tokens": 1436,
+      "prompt_tokens": 144,
+      "elapsed_s": 14.426135301589966,
+      "gen_tail": "answer 116.\n\nBut let's double-check: The total number of ways to choose 4 numbers from 10 is C(10,4)=210. Number of ways that at least 2 of her numbers match: we computed 115. That includes the case where all 4 match (1 way). So conditional = 1/115. So m+n=1+115=116.\n\nThus final answer: \\boxed{116}."
+    },
+    {
+      "id": "2024-I-3",
+      "expected": 809,
+      "pred": 809,
+      "correct": true,
+      "finish": "stop",
+      "completion_tokens": 3581,
+      "prompt_tokens": 122,
+      "elapsed_s": 34.1536169052124,
+      "gen_tail": "han or equal to 2024 for which there exists a strategy for Bob that guarantees that Bob will win the game regardless of Alice's play.\" So Bob wins when n is a losing position for Alice. So answer 809.\n\nWe should double-check that n=0 is not counted. So answer is 809.\n\nThus final answer: \\boxed{809}."
+    },
+    {
+      "id": "2024-I-8",
+      "expected": 197,
+      "pred": null,
+      "correct": false,
+      "finish": "length",
+      "completion_tokens": 10000,
+      "prompt_tokens": 114,
+      "elapsed_s": 92.26864862442017,
+      "gen_tail": "oint (x,y) to AB is y. So we need y = r. So the point(s) on the circle with y = r. Similarly, for BC, we need -x sin(2\u03b8) + y cos(2\u03b8) = r. Because of symmetry, the point on the circle that touches AB will have a certain angular position relative to I. Let's find the coordinates of the point where the"
+    },
+    {
+      "id": "2024-I-12",
+      "expected": 385,
+      "pred": null,
+      "correct": false,
+      "finish": "length",
+      "completion_tokens": 10000,
+      "prompt_tokens": 102,
+      "elapsed_s": 89.55319547653198,
+      "gen_tail": "one of four values depending on x.\n\nSo we have:\n\n|sin(2\u03c0 x)| \u2208 S(y) = { d1, 1/2 - d1, 1/2 + d1, 1 - d1 } where d1 = (1-y)/4.\n|cos(3\u03c0 y)| \u2208 T(x) = { d2, 1/2 - d2, 1/2 + d2, 1 - d2 } where d2 = (1-x)/4.\n\nBut note that d1 and d2 are related to y and x respectively. So we have a system where x and y are"
+    },
+    {
+      "id": "2024-I-11",
+      "expected": 371,
+      "pred": 6,
+      "correct": false,
+      "finish": "length",
+      "completion_tokens": 10000,
+      "prompt_tokens": 99,
+      "elapsed_s": 91.43772554397583,
+      "gen_tail": "sts of exactly 2 antipodal pairs. But also we need the condition B+2 = B^c. Let's see: For a set B that is a union of antipodal pairs, what is B+2? Since +2 maps each vertex to the vertex two steps away. For the antipodal pairs, note that +2 maps {0,4} to {2,6}? Actually 0+2=2, 4+2=6. So it maps the"
+    },
+    {
+      "id": "2024-II-11",
+      "expected": 601,
+      "pred": 601,
+      "correct": true,
+      "finish": "stop",
+      "completion_tokens": 4477,
+      "prompt_tokens": 91,
+      "elapsed_s": 39.12775683403015,
+      "gen_tail": "sed the identity s1 s2 - 3 s3 = sum a^2 b. That holds for any numbers. Then we set x = a-100 etc. and used x+y+z=0. The algebra gave xyz=0. So it's rigorous. So answer is 601.\n\nThus the number of triples is 601.\n\nNow we need to output the integer answer inside \\boxed{}. So final answer: \\boxed{601}."
+    },
+    {
+      "id": "2024-I-2",
+      "expected": 25,
+      "pred": 25,
+      "correct": true,
+      "finish": "stop",
+      "completion_tokens": 901,
+      "prompt_tokens": 69,
+      "elapsed_s": 8.434815645217896,
+      "gen_tail": " don't need to find x,y individually; the product is determined uniquely.\n\nThus answer: 25.\n\nBut wait: The problem says \"There exist real numbers x and y, both greater than 1, such that ...\" So it's given that such numbers exist. Then we deduce xy=25. So answer is 25.\n\nThus final answer: \\boxed{25}."
+    },
+    {
+      "id": "2024-II-6",
+      "expected": 55,
+      "pred": 55,
+      "correct": true,
+      "finish": "stop",
+      "completion_tokens": 2291,
+      "prompt_tokens": 85,
+      "elapsed_s": 21.0169677734375,
+      "gen_tail": "ess. So fine.\n\nAlso, note that B is finite nonempty. So for each m, the empty subset of {1,...,m-1} combined with {m} gives B = {m}, which is allowed. So count includes that.\n\nThus answer is 55.\n\nBut the problem says \"Find the sum of the elements of A.\" So answer is 55.\n\nWe should output \\boxed{55}."
+    },
+    {
+      "id": "2024-I-7",
+      "expected": 540,
+      "pred": 540,
+      "correct": true,
+      "finish": "stop",
+      "completion_tokens": 1556,
+      "prompt_tokens": 67,
+      "elapsed_s": 14.175952911376953,
+      "gen_tail": "oblem asks: \"Find the largest possible real part ...\" and \"place your final integer answer (0-999) inside \\boxed{...}\". So answer is 540.\n\nWe should also consider if there is any other approach like using triangle inequality or something, but this is straightforward.\n\nThus final answer: \\boxed{540}."
+    },
+    {
+      "id": "2024-II-3",
+      "expected": 45,
+      "pred": 45,
+      "correct": true,
+      "finish": "stop",
+      "completion_tokens": 1940,
+      "prompt_tokens": 144,
+      "elapsed_s": 18.73383402824402,
+      "gen_tail": "double-check if there is any nuance: The numbers formed by reading left to right: top row and bottom row. They are 3-digit numbers? In example, top row is 0,0,8 which is 8 (but as a 3-digit number it's 008 = 8). So it's fine. So leading zeros allowed. So answer is 45.\n\nThus final answer: \\boxed{45}."
+    },
+    {
+      "id": "2024-I-1",
+      "expected": 204,
+      "pred": 204,
+      "correct": true,
+      "finish": "stop",
+      "completion_tokens": 1177,
+      "prompt_tokens": 158,
+      "elapsed_s": 10.488702058792114,
+      "gen_tail": "w speed s+1/2 = 2.5+0.5=3 km/h. Walking time = 9/3 = 3 hours = 180 minutes. Plus t=24 minutes gives total 204 minutes. So answer: 204 minutes.\n\nBut the problem says \"including the t minutes spent in the coffee shop\", so total time is 204 minutes. So answer is 204.\n\nWe need to put inside \\boxed{204}."
+    },
+    {
+      "id": "2024-II-7",
+      "expected": 699,
+      "pred": 699,
+      "correct": true,
+      "finish": "stop",
+      "completion_tokens": 4390,
+      "prompt_tokens": 93,
+      "elapsed_s": 40.16989874839783,
+      "gen_tail": " 7. In our solution, N=5694 is not divisible by 7? 5694/7 = 813.428? Actually 7*813=5691, remainder 3, so N mod7 = 3. So N is not divisible by 7. That's fine because none of its digits are 1. So no conflict.\n\nThus final answer: 699.\n\nNow we need to output the integer inside \\boxed{}. So \\boxed{699}."
+    },
+    {
+      "id": "2024-I-6",
+      "expected": 294,
+      "pred": 294,
+      "correct": true,
+      "finish": "stop",
+      "completion_tokens": 2007,
+      "prompt_tokens": 78,
+      "elapsed_s": 19.433775186538696,
+      "gen_tail": "? No.\n\nThus answer is 294.\n\nBut let's double-check the combinatorial counts: For case 1: r1,r2,r3 positive integers sum to 8: number of compositions of 8 into 3 parts = C(8-1,3-1)=C(7,2)=21. u1,u2 positive sum to 8: C(7,1)=7. So 147. Similarly case 2: 147. Total 294.\n\nThus final answer: \\boxed{294}."
+    },
+    {
+      "id": "2024-I-13",
+      "expected": 110,
+      "pred": 110,
+      "correct": true,
+      "finish": "stop",
+      "completion_tokens": 5822,
+      "prompt_tokens": 88,
+      "elapsed_s": 53.43832230567932,
+      "gen_tail": "13\u22615 mod8, no solution mod13. p=5? no. p=3? no. p=2? no. So p=17 is indeed the least. So m=110.\n\nBut wait: p=17 is the least prime \u22611 mod8, but is there any prime p=1 mod8 that is less than 17? 1 mod8 numbers: 1,9,17,... 9 is not prime, so 17 is smallest. So correct.\n\nThus final answer: \\boxed{110}."
+    },
+    {
+      "id": "2024-I-15",
+      "expected": 721,
+      "pred": 75,
+      "correct": false,
+      "finish": "length",
+      "completion_tokens": 10000,
+      "prompt_tokens": 113,
+      "elapsed_s": 89.9865665435791,
+      "gen_tail": "? Actually the feasible a range is from a = (25+4\u221a6)/23? Let's derive exactly. The condition D>=0 gave a in [a_low, a_high] where a_low and a_high are the roots of f(a)=0 that are >0 and also give b+c>0. The roots we found: a1 = (25 - 4\u221a6)/23 \u22480.66096, a2 = (25+4\u221a6)/23 \u22481.5129, a3 = 23/4 = 5.75. But"
+    },
+    {
+      "id": "2024-II-15",
+      "expected": 315,
+      "pred": null,
+      "correct": false,
+      "finish": "length",
+      "completion_tokens": 10000,
+      "prompt_tokens": 78,
+      "elapsed_s": 90.47878527641296,
+      "gen_tail": "ect rectangles that include those corners. A rectangle is defined by two rows and two columns. If the rectangle includes a corner cell, then that cell is an intersection of a specific row and column. So we need to count the number of row pairs and column pairs that avoid having both a row from {H1,H"
+    },
+    {
+      "id": "2024-II-10",
+      "expected": 468,
+      "pred": 468,
+      "correct": true,
+      "finish": "stop",
+      "completion_tokens": 3872,
+      "prompt_tokens": 71,
+      "elapsed_s": 34.60581064224243,
+      "gen_tail": "9, sin^2=9/39=3/13, cos A=1-2*(3/13)=7/13. Good.\n\nNow we used r = \u0394/s, \u0394 = (1/2)bc sin A = (1/2)bc*(2\u221a30/13)=bc\u221a30/13. So s = \u0394/r = bc\u221a30/(13*6)=bc\u221a30/78. Also s = (a+b+c)/2. And a = 2R sin A = 2*13*(2\u221a30/13)=4\u221a30. So we got equation leading to bc=468. So answer 468.\n\nThus final answer: \\boxed{468}."
+    },
+    {
+      "id": "2024-II-9",
+      "expected": 902,
+      "pred": 902,
+      "correct": true,
+      "finish": "stop",
+      "completion_tokens": 6346,
+      "prompt_tokens": 118,
+      "elapsed_s": 57.60511136054993,
+      "gen_tail": "cement exactly once because the placement determines the row and column colours uniquely (since each row has at least one chip, its colour is the colour of that chip; similarly for columns). So no overcounting.\n\nThus answer is 902.\n\nNow, we need to output the integer inside \\boxed{}. So \\boxed{902}."
+    },
+    {
+      "id": "2024-II-14",
+      "expected": 211,
+      "pred": 1,
+      "correct": false,
+      "finish": "length",
+      "completion_tokens": 10000,
+      "prompt_tokens": 137,
+      "elapsed_s": 89.05518627166748,
+      "gen_tail": "162? mod2=0, mod3=0, mod5=2 (fail). r=163? mod2=1, mod3=1, mod5=3 (fail). r=164? mod2=0, mod3=2 (fail). r=165? mod2=1, mod3=0, mod5=0, mod7=4? 165 mod7=4, fail. r=166? mod2=0, mod3=1, mod5=1, mod7=5? 166 mod7=5, fail. r=167? mod2=1, mod3=2 (fail). r=168? mod2=0, mod3=0, mod5=3 (fail). r=169? mod2=1,"
+    },
+    {
+      "id": "2024-II-5",
+      "expected": 80,
+      "pred": 1,
+      "correct": false,
+      "finish": "length",
+      "completion_tokens": 10000,
+      "prompt_tokens": 82,
+      "elapsed_s": 90.2559700012207,
+      "gen_tail": "o these are 1 plus something.\n\nWe can also write A = (sin\u03b1 sin\u03b3 + sin\u03b2 sin\u03b3 + sin\u03b2 sin\u03b1) / (sin\u03b1 sin\u03b3). Actually, 1 = sin\u03b1 sin\u03b3/(sin\u03b1 sin\u03b3)? Not exactly. Let's put over common denominator: A = 1 + sin\u03b2/sin\u03b1 + sin\u03b2/sin\u03b3 = (sin\u03b1 sin\u03b3 + sin\u03b2 sin\u03b3 + sin\u03b2 sin\u03b1) / (sin\u03b1 sin\u03b3). So A = (sin\u03b1 sin\u03b3 + sin\u03b2(sin"
+    },
+    {
+      "id": "2024-I-9",
+      "expected": 480,
+      "pred": 11,
+      "correct": false,
+      "finish": "length",
+      "completion_tokens": 10000,
+      "prompt_tokens": 103,
+      "elapsed_s": 90.66608142852783,
+      "gen_tail": "e is an asymptote, so there is no finite intersection point A. So the condition for existence of A is strict inequality: y2^2/20 - x2^2/24 > 0, i.e., x2^2 > 720/11. So the point with x2^2 = 720/11 is not allowed because then the perpendicular line is an asymptote and does not intersect the hyperbola"
+    },
+    {
+      "id": "2024-II-2",
+      "expected": 236,
+      "pred": 236,
+      "correct": true,
+      "finish": "stop",
+      "completion_tokens": 3688,
+      "prompt_tokens": 96,
+      "elapsed_s": 33.125608921051025,
+      "gen_tail": " So our reasoning is correct.\n\nThus the list is [5,7,9,9]. Sum of squares: 5^2 + 7^2 + 9^2 + 9^2 = 25 + 49 + 81 + 81 = 236. So answer is 236.\n\nBut we need to ensure that the median condition is satisfied: median is 8, which is a positive integer not in the list. Yes.\n\nThus final answer: \\boxed{236}."
+    },
+    {
+      "id": "2024-II-1",
+      "expected": 73,
+      "pred": 73,
+      "correct": true,
+      "finish": "stop",
+      "completion_tokens": 1850,
+      "prompt_tokens": 124,
+      "elapsed_s": 17.429919242858887,
+      "gen_tail": "2. From (2): b+d+f = 367-73=294. From (3): c+e+f = 562-73=489. Also a+b+c=437. Sum of these three: (a+d+e)+(b+d+f)+(c+e+f) = (a+b+c) + 2(d+e+f) = 437 + 2*234 = 437+468=905. And the sum of the right sides: 122+294+489=905, consistent. So it's solvable. So answer is 73.\n\nThus final answer: \\boxed{73}."
+    },
+    {
+      "id": "2024-I-10",
+      "expected": 113,
+      "pred": 113,
+      "correct": true,
+      "finish": "length",
+      "completion_tokens": 10000,
+      "prompt_tokens": 368,
+      "elapsed_s": 89.0952513217926,
+      "gen_tail": "/(3*169) because 88/33=8/3? 88/33 = 8/3? 33*8/3=88, yes. So = -1000\u221a14/(3*169) = -1000\u221a14/507. So P = (1/3 + 1100/507, 4\u221a14/3 - 1000\u221a14/507). Compute 1/3 = 169/507? Because 507/3=169, so 1/3 = 169/507. So x = (169+1100)/507 = 1269/507 = simplify? 1269/507 = divide by 3: 423/169 = 423/169. 423=3*141="
+    },
+    {
+      "id": "2024-II-8",
+      "expected": 127,
+      "pred": 9,
+      "correct": false,
+      "finish": "length",
+      "completion_tokens": 10000,
+      "prompt_tokens": 183,
+      "elapsed_s": 89.71176886558533,
+      "gen_tail": "e: 3\u221a7/4 = 3*2.64575/4 = 7.93725/4 = 1.9843. Then h = -8z/3 = -8*1.9843/3 = -15.8744/3 = -5.2915 if z positive; if z negative, h positive 5.2915. So sphere center at about (0,0,\u00b15.29). Sphere radius 11. So the sphere encloses the torus? The torus extends from z=-3 to 3, and \u03c1 from 3 to 9. The sphere"
+    },
+    {
+      "id": "2024-I-14",
+      "expected": 104,
+      "pred": 104,
+      "correct": true,
+      "finish": "stop",
+      "completion_tokens": 4902,
+      "prompt_tokens": 162,
+      "elapsed_s": 42.7669141292572,
+      "gen_tail": "-4)+8*2.5-10*(-2)= -20+20+20=20, ok. So plane equation: 5x+8y-10z=20. Distance from origin (0,0,0) to this plane is |0-20|/\u221a(5^2+8^2+(-10)^2) = 20/\u221a(25+64+100)=20/\u221a189 = 20/\u221a(9*21)=20/(3\u221a21)=20\u221a21/63. Yes, matches r. So indeed the inradius is 20\u221a21/63. So answer 104.\n\nThus final answer: \\boxed{104}."
+    },
+    {
+      "id": "2024-I-5",
+      "expected": 104,
+      "pred": 104,
+      "correct": true,
+      "finish": "stop",
+      "completion_tokens": 6453,
+      "prompt_tokens": 95,
+      "elapsed_s": 55.935537815093994,
+      "gen_tail": "above, we got x_E x_F = 17, which gave a very small x_E, not integer. But maybe that could also be valid? However, the problem likely expects an integer answer, and 104 is integer. Also, the given lengths are integers: 16,107,17,184. So 104 is nice. So answer is 104.\n\nThus final answer: \\boxed{104}."
+    },
+    {
+      "id": "2024-II-13",
+      "expected": 321,
+      "pred": 321,
+      "correct": true,
+      "finish": "stop",
+      "completion_tokens": 4471,
+      "prompt_tokens": 80,
+      "elapsed_s": 36.843385457992554,
+      "gen_tail": "}^{12} (2 - 2\u03c9^k + \u03c9^{2k}). Could it be that \u03c9 is a primitive 13th root, but the product is over k, and \u03c9^{2k} might be interpreted as (\u03c9^2)^k? That's fine. So our factorization stands.\n\nThus final answer: 321.\n\nWe should present reasoning step-by-step and then box answer.\n\nNow produce final output."
+    }
+  ]
+}

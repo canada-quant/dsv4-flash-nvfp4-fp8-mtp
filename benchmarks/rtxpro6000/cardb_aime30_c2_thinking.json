@@ -1,0 +1,369 @@
+{
+  "meta": {
+    "timestamp_utc": "2026-05-25T03:48:14.820632+00:00",
+    "dataset": "Maxwell-Jia/AIME_2024",
+    "model": "DSV4-NVFP4-FP8-MTP",
+    "concurrency": 2,
+    "max_tokens": 13000,
+    "thinking": true,
+    "n": 30
+  },
+  "totals": {
+    "correct": 23,
+    "errors": 0,
+    "wallclock_s": 787.6041638851166,
+    "finish_reasons": {
+      "stop": 23,
+      "length": 7
+    }
+  },
+  "mtp_delta": {
+    "d_drafts": 103981.0,
+    "d_draft_tokens": 103981.0,
+    "d_accepted_tokens": 94359.0,
+    "acceptance_rate": 0.9074638635904636,
+    "tokens_per_step": 1.9074638635904635
+  },
+  "pre_metrics": {
+    "drafts": 107675.0,
+    "draft_tokens": 107675.0,
+    "accepted_tokens": 97566.0
+  },
+  "post_metrics": {
+    "drafts": 211656.0,
+    "draft_tokens": 211656.0,
+    "accepted_tokens": 191925.0
+  },
+  "results": [
+    {
+      "id": "2024-II-4",
+      "expected": 33,
+      "pred": 33,
+      "correct": true,
+      "finish": "stop",
+      "completion_tokens": 1371,
+      "prompt_tokens": 165,
+      "elapsed_s": 12.281278133392334,
+      "gen_tail": "= 25/8.\n\nSo m=25, n=8, relatively prime. Then m+n = 33.\n\nThus answer is 33.\n\nBut wait: The problem says \"Then the value of $\\left|\\log_2(x^4y^3z^2)\\right|$ is $\\tfrac{m}{n}$ where $m$ and $n$ are relatively prime positive integers. Find $m+n$.\" So indeed 25/8, m+n=33.\n\nThus final answer: \\boxed{33}."
+    },
+    {
+      "id": "2024-II-12",
+      "expected": 23,
+      "pred": 23,
+      "correct": true,
+      "finish": "stop",
+      "completion_tokens": 8910,
+      "prompt_tokens": 186,
+      "elapsed_s": 72.17033433914185,
+      "gen_tail": "om 0.909 to 1 then decreases to 0.63. So there is a maximum at t=1/8. So f(t)=1 only at t=1/8 (since maximum is exactly 1). So unique solution. So C is unique.\n\nThus answer is 23.\n\nBut wait: The problem says \"Then $OC^2 = \\tfrac{p}{q}$\". So p/q = 7/16, p=7, q=16, sum=23. So final answer: \\boxed{23}."
+    },
+    {
+      "id": "2024-I-4",
+      "expected": 116,
+      "pred": 116,
+      "correct": true,
+      "finish": "stop",
+      "completion_tokens": 1874,
+      "prompt_tokens": 144,
+      "elapsed_s": 15.66532278060913,
+      "gen_tail": "there be any other interpretation? For example, maybe the lottery draws 4 numbers, but she picks 4 numbers, and she wins a prize if at least two of her numbers match the drawn numbers, but also maybe the order matters? No, it's about numbers, not order. So it's fine.\n\nThus final answer: \\boxed{116}."
+    },
+    {
+      "id": "2024-I-3",
+      "expected": 809,
+      "pred": 809,
+      "correct": true,
+      "finish": "stop",
+      "completion_tokens": 3427,
+      "prompt_tokens": 122,
+      "elapsed_s": 26.53422498703003,
+      "gen_tail": "less than or equal to 2024 for which there exists a strategy for Bob that guarantees that Bob will win the game regardless of Alice's play.\" That is exactly the count of P-positions. So answer 809.\n\nWe should ensure that the game is normal play (last move wins). Yes.\n\nThus final answer: \\boxed{809}."
+    },
+    {
+      "id": "2024-I-8",
+      "expected": 197,
+      "pred": 2,
+      "correct": false,
+      "finish": "length",
+      "completion_tokens": 13000,
+      "prompt_tokens": 114,
+      "elapsed_s": 102.67271447181702,
+      "gen_tail": "o to AC. Its center I lies on the angle bisector at distance r / sin(\u03b8/2) from B. Its distances to AB and BC are both r. So in our (d1,d2) coordinates, the incircle center I has d1 = r, d2 = r. Because it is at distance r from both sides. So I = (d1=r, d2=r). Its distance from B is sqrt(r^2 + r^2 + "
+    },
+    {
+      "id": "2024-I-12",
+      "expected": 385,
+      "pred": 4,
+      "correct": false,
+      "finish": "length",
+      "completion_tokens": 13000,
+      "prompt_tokens": 102,
+      "elapsed_s": 100.75032043457031,
+      "gen_tail": "nalyze.\n\nSimilarly, on [1/4,1/2], u = sin(2\u03c0 x) decreases from 1 to 0. So we can break into intervals based on u values: u passes through 3/4, 1/2, 1/4 as x increases. Since u decreasing, the order reverses. Let's find x values: at x=1/4, u=1; at x\u22480.365? Actually we need x where u=3/4: from earlier"
+    },
+    {
+      "id": "2024-I-11",
+      "expected": 371,
+      "pred": 6,
+      "correct": false,
+      "finish": "length",
+      "completion_tokens": 13000,
+      "prompt_tokens": 99,
+      "elapsed_s": 102.1765730381012,
+      "gen_tail": ". So this subset is also bad. What about B = all except {0,1,3}? B = {2,4,5,6,7}. Check k=1: i=2:2 and3? 3 missing; i=4:4 and5 both in B? 4,5 yes. So 1 appears. k=2: i=2:2 and4 both in B? 2,4 yes. So 2 appears. k=3: i=2:2 and5 both in B? 2,5 yes. So 3 appears. k=4: i=2:2 and6 both in B? 2,6 yes. So "
+    },
+    {
+      "id": "2024-II-11",
+      "expected": 601,
+      "pred": 601,
+      "correct": true,
+      "finish": "stop",
+      "completion_tokens": 5713,
+      "prompt_tokens": 91,
+      "elapsed_s": 43.53311634063721,
+      "gen_tail": "the problem asks: \"Find the number of triples of nonnegative integers (a,b,c) satisfying a+b+c=300 and ... =6,000,000.\" So answer is 601.\n\nWe should double-check that we didn't miss any solutions where u+v+w=0 but uvw=0 is necessary and sufficient for sum u^3=0. Yes.\n\nThus final answer: \\boxed{601}."
+    },
+    {
+      "id": "2024-I-2",
+      "expected": 25,
+      "pred": 25,
+      "correct": true,
+      "finish": "stop",
+      "completion_tokens": 2315,
+      "prompt_tokens": 69,
+      "elapsed_s": 17.845727682113647,
+      "gen_tail": "er is 25.\n\nWe should also check if there is any nuance: The equations are log_x(y^x)=10 and log_y(x^{4y})=10. Could there be any alternative interpretation? For example, log_x(y^x) might be interpreted as log base x of (y^x) which is indeed x log_x(y). So that's fine.\n\nThus final answer: \\boxed{25}."
+    },
+    {
+      "id": "2024-II-6",
+      "expected": 55,
+      "pred": 55,
+      "correct": true,
+      "finish": "stop",
+      "completion_tokens": 2025,
+      "prompt_tokens": 85,
+      "elapsed_s": 15.966918230056763,
+      "gen_tail": "xactly those m. So answer is 55.\n\nBut wait: Could A be something like {1,2,3,...} infinite? Then sum diverges, not 2024. So finite.\n\nThus answer: 55.\n\nBut the problem says \"Find the sum of the elements of A.\" And the answer is an integer between 0 and 999. So 55 fits.\n\nThus final answer: \\boxed{55}."
+    },
+    {
+      "id": "2024-I-7",
+      "expected": 540,
+      "pred": 540,
+      "correct": true,
+      "finish": "stop",
+      "completion_tokens": 2265,
+      "prompt_tokens": 67,
+      "elapsed_s": 17.54943084716797,
+      "gen_tail": ": 300 cos\u03b8 -468 sin\u03b8 +24 cos\u03b8+36 sin\u03b8 = 324 cos\u03b8 -432 sin\u03b8. Yes.\n\nSo maximum = sqrt(324^2+432^2)=540. So answer is 540.\n\nBut the problem asks: \"Find the largest possible real part ... then place your final integer answer (0-999) inside \\boxed{...}.\" So answer is 540.\n\nThus final answer: \\boxed{540}."
+    },
+    {
+      "id": "2024-II-3",
+      "expected": 45,
+      "pred": 45,
+      "correct": true,
+      "finish": "stop",
+      "completion_tokens": 2620,
+      "prompt_tokens": 144,
+      "elapsed_s": 21.574583292007446,
+      "gen_tail": "es 800, then 10S2+S3=199, but max 10*18+18=198, so no. So only S1=9, S2=9, S3=9. So that's forced.\n\nThus answer is 45.\n\nBut wait: The grid is 2x3, so we have 6 cells. The assignment is determined by a,b,c. So number of ways = number of triples (a,b,c) with sum 8 = 45.\n\nThus final answer: \\boxed{45}."
+    },
+    {
+      "id": "2024-I-1",
+      "expected": 204,
+      "pred": 204,
+      "correct": true,
+      "finish": "stop",
+      "completion_tokens": 1301,
+      "prompt_tokens": 158,
+      "elapsed_s": 10.538288831710815,
+      "gen_tail": "tes, total time = 3 hours 24 minutes = 3*60+24 = 204 minutes.\n\nThus answer: 204 minutes.\n\nBut the problem says \"Find the number of minutes the walk takes her, including the t minutes spent in the coffee shop.\" So answer is 204.\n\nWe need to put final integer answer inside \\boxed{...}. So \\boxed{204}."
+    },
+    {
+      "id": "2024-II-7",
+      "expected": 699,
+      "pred": 699,
+      "correct": true,
+      "finish": "stop",
+      "completion_tokens": 3239,
+      "prompt_tokens": 93,
+      "elapsed_s": 25.639126777648926,
+      "gen_tail": "indeed the greatest four-digit number with the property. Could there be any other N with a=9? Our derivation forced a \u22615 mod7, so a=5 only. So no other a. So 5694 is the maximum among those with a=5, and c=9 gives larger than c=2. So yes.\n\nThus final answer: 699.\n\nWe should place inside \\boxed{699}."
+    },
+    {
+      "id": "2024-I-6",
+      "expected": 294,
+      "pred": 294,
+      "correct": true,
+      "finish": "stop",
+      "completion_tokens": 1145,
+      "prompt_tokens": 78,
+      "elapsed_s": 8.863284587860107,
+      "gen_tail": "n? No, typical grid path from lower left to upper right only uses right and up. So it's fine.\n\nDouble-check: The number of runs is 5, so direction changes = 4. Yes.\n\nThus answer is 294.\n\nBut let's ensure that the path length is 16, which is exactly 8+8. So it's fine.\n\nThus final answer: \\boxed{294}."
+    },
+    {
+      "id": "2024-I-13",
+      "expected": 110,
+      "pred": 110,
+      "correct": true,
+      "finish": "stop",
+      "completion_tokens": 4641,
+      "prompt_tokens": 88,
+      "elapsed_s": 36.88827395439148,
+      "gen_tail": "110,134,155,179. So the smallest is 110. So answer is 110.\n\nBut we need to double-check that p=17 is indeed the least prime. Could p=13? No, because -1 not a fourth power mod13. p=5? No. p=2? fails. p=3? fails. p=7? fails. p=11? fails. So p=17 is the least. So m=110.\n\nThus final answer: \\boxed{110}."
+    },
+    {
+      "id": "2024-I-15",
+      "expected": 721,
+      "pred": null,
+      "correct": false,
+      "finish": "length",
+      "completion_tokens": 13000,
+      "prompt_tokens": 113,
+      "elapsed_s": 100.21516752243042,
+      "gen_tail": " S(2)=9.75, S(3.89898)\u22489.312. So S(2) is larger. Now check endpoints: At a=a2\u22481.5129, S(a2)=? Compute a2 = (25+4\u221a6)/23. Let's compute exact value maybe. a2 = (25+4\u221a6)/23. Then S(a2) = a2 + 27/a2 - 23/a2^2. Since at a2, discriminant is zero, meaning b=c. So at a2, we have b=c. That corresponds to the"
+    },
+    {
+      "id": "2024-II-15",
+      "expected": 315,
+      "pred": null,
+      "correct": false,
+      "finish": "length",
+      "completion_tokens": 13000,
+      "prompt_tokens": 78,
+      "elapsed_s": 101.34029483795166,
+      "gen_tail": "wever, there might be rectangles whose vertices are not all on the circle, but some are interior. For example, consider a rectangle formed by two sides of the dodecagon? Sides are chords between adjacent vertices. Two sides that are perpendicular? In a regular dodecagon, sides are not perpendicular;"
+    },
+    {
+      "id": "2024-II-10",
+      "expected": 468,
+      "pred": 468,
+      "correct": true,
+      "finish": "stop",
+      "completion_tokens": 3187,
+      "prompt_tokens": 71,
+      "elapsed_s": 25.446173667907715,
+      "gen_tail": "= 6\u221a30. Then r = \u0394/s = 36\u221a30/(6\u221a30)=6, matches. R = abc/(4\u0394) = (4\u221a30 * 468)/(4*36\u221a30) = (4*468\u221a30)/(144\u221a30) = (4*468)/144 = 1872/144 = 13, matches. So consistent.\n\nThus product AB * AC = bc = 468. So answer is 468.\n\nBut the problem asks: \"Find AB\u00b7AC.\" So product is 468. So final answer: \\boxed{468}."
+    },
+    {
+      "id": "2024-II-9",
+      "expected": 902,
+      "pred": 902,
+      "correct": true,
+      "finish": "stop",
+      "completion_tokens": 11084,
+      "prompt_tokens": 118,
+      "elapsed_s": 87.81060218811035,
+      "gen_tail": " conclusion stands.\n\nThus answer is 902.\n\nBut wait: Could there be a scenario where a row is active but its colour is not defined because it has chips of both colours? No, condition forbids that. So fine.\n\nThus final answer: 902.\n\nNow we need to output the integer inside \\boxed{...}. So \\boxed{902}."
+    },
+    {
+      "id": "2024-II-14",
+      "expected": 211,
+      "pred": 1,
+      "correct": false,
+      "finish": "length",
+      "completion_tokens": 13000,
+      "prompt_tokens": 137,
+      "elapsed_s": 99.25663661956787,
+      "gen_tail": "=k, gcd(u,v)=1) such that the corresponding t_{u,v} lies in [1, k] (it always does, as it's between 0 and k-1, but t=0 might occur? For v=1, the solution t \u2261 0 mod u, t \u2261 1 mod 1 gives t=0 as the smallest nonnegative? Actually the system t \u2261 0 (mod u), t \u2261 1 (mod 1) is always true for any t, but the"
+    },
+    {
+      "id": "2024-II-5",
+      "expected": 80,
+      "pred": 80,
+      "correct": true,
+      "finish": "stop",
+      "completion_tokens": 7455,
+      "prompt_tokens": 82,
+      "elapsed_s": 59.335333585739136,
+      "gen_tail": "Actually b = u+s+v, so u+v = b - s. Since s positive, u+v < b. That's fine. Also we need that the cut lines BC, DE, FA are inside the triangle, which they will be if the points are interior. So convex.\n\nThus answer is 80.\n\nNow we need to output final integer answer inside \\boxed{...}. So \\boxed{80}."
+    },
+    {
+      "id": "2024-I-9",
+      "expected": 480,
+      "pred": 480,
+      "correct": true,
+      "finish": "stop",
+      "completion_tokens": 11327,
+      "prompt_tokens": 103,
+      "elapsed_s": 88.55314254760742,
+      "gen_tail": "t their midpoints. So the intersection point is the midpoint of both diagonals. So if the origin is that intersection, then the midpoint of AC is origin, so A = -C; similarly B = -D. So yes.\n\nThus answer is 480.\n\nNow we need to output the integer answer inside \\boxed{}. So final answer: \\boxed{480}."
+    },
+    {
+      "id": "2024-II-2",
+      "expected": 236,
+      "pred": 236,
+      "correct": true,
+      "finish": "stop",
+      "completion_tokens": 4541,
+      "prompt_tokens": 96,
+      "elapsed_s": 36.12573003768921,
+      "gen_tail": "pretation is correct.\n\nThus final answer: 236.\n\nBut let's double-check if there could be a list with odd number of elements where the median is not in the list? That's impossible because median is one of the elements. So odd n is ruled out.\n\nThus answer is 236.\n\nNow we need to output in \\boxed{236}."
+    },
+    {
+      "id": "2024-II-1",
+      "expected": 73,
+      "pred": 73,
+      "correct": true,
+      "finish": "stop",
+      "completion_tokens": 2362,
+      "prompt_tokens": 124,
+      "elapsed_s": 19.351808786392212,
+      "gen_tail": " 73.\n\nBut let's double-check: If we treat \"these things\" as the three items (excluding candy hearts), then the numbers would be different. But then they ask for \"all four\", which would include candy hearts. So that would be inconsistent. So it's definitely four items.\n\nThus final answer: \\boxed{73}."
+    },
+    {
+      "id": "2024-I-10",
+      "expected": 113,
+      "pred": 113,
+      "correct": true,
+      "finish": "stop",
+      "completion_tokens": 9659,
+      "prompt_tokens": 368,
+      "elapsed_s": 74.8339307308197,
+      "gen_tail": "ly 1000^2=1,000,000, times 14 = 14,000,000. 1100^2=1,210,000. Sum=15,210,000. sqrt(15,210,000) = sqrt(1521*10000) = sqrt(1521)*100 = 39*100 = 3900. So distance = 3900/507 = simplify: divide by 3: 1300/169 = 100/13. Yes. So AP = 100/13. Good.\n\nThus answer is 100+13=113.\n\nSo final answer: \\boxed{113}."
+    },
+    {
+      "id": "2024-II-8",
+      "expected": 127,
+      "pred": 11,
+      "correct": false,
+      "finish": "length",
+      "completion_tokens": 13000,
+      "prompt_tokens": 183,
+      "elapsed_s": 102.95514512062073,
+      "gen_tail": "torus's inner surface (the part near the axis) touches the sphere from the outside. For example, if the torus is shifted upward so that its center is at (0,0,d) with d large, then the torus's inner side (the part with \u03c1 = R - a = 3) might contact the sphere. But the sphere's radius is 11, so at some"
+    },
+    {
+      "id": "2024-I-14",
+      "expected": 104,
+      "pred": 104,
+      "correct": true,
+      "finish": "stop",
+      "completion_tokens": 4585,
+      "prompt_tokens": 162,
+      "elapsed_s": 35.5419442653656,
+      "gen_tail": "=20, n=21, p=63. Are m and p relatively prime? 20 and 63 share gcd? 20 factors: 2^2*5; 63=3^2*7; gcd=1. So yes. n=21 is squarefree? 21=3*7, no square factors. So condition satisfied.\n\nThus answer: 104.\n\nBut let's ensure that the problem expects the sum m+n+p. So answer is 104.\n\nI'll put \\boxed{104}."
+    },
+    {
+      "id": "2024-I-5",
+      "expected": 104,
+      "pred": 104,
+      "correct": true,
+      "finish": "stop",
+      "completion_tokens": 7864,
+      "prompt_tokens": 95,
+      "elapsed_s": 59.50888991355896,
+      "gen_tail": "ow, we should also consider that the circle through A, D, H, G might have other constraints like the points are in that order on the circle, but we already satisfied.\n\nThus final answer: 104.\n\nBut let's double-check the arithmetic: e=3, f=187, CE = 107-3=104. Yes.\n\nNow we need to output \\boxed{104}."
+    },
+    {
+      "id": "2024-II-13",
+      "expected": 321,
+      "pred": 321,
+      "correct": true,
+      "finish": "stop",
+      "completion_tokens": 4447,
+      "prompt_tokens": 80,
+      "elapsed_s": 33.86572742462158,
+      "gen_tail": "pler.\n\nWe can also compute P = \u220f_{k=0}^{12} ((\u03c9^k-1)^2+1). For k=0, (1-1)^2+1=1. For other k, (\u03c9^k-1)^2+1. Could there be any simplification? Not needed.\n\nThus answer 321.\n\nBut wait: The problem might be from an contest where answer is between 0 and 999. So 321 fits.\n\nThus final answer: \\boxed{321}."
+    }
+  ]
+}
