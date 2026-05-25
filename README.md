@@ -40,6 +40,22 @@ Validated 2026-05-23 on Brev. MTP-on for all rows, k=1 (SM 12.0 cap).
 | TP=2 | 94.6 | 218.5 | 360.5 | 9.05 ms | 70–73% | 88% |
 | TP=4 | **101.0** | 254.0 | **440.1** | **8.20 ms** | 67–75% | 90% |
 
+#### AIME-2024 deep thinking-mode concurrency sweep (2026-05-25)
+
+TP=4, cuda graphs ON (capture sizes [1,2,4,8]), MTP `num_speculative_tokens=1`, `max-model-len=16384`. Bench JSONs at [`benchmarks/rtxpro6000/cardb_aime30_c{1,2,4,8}_thinking.json`](benchmarks/rtxpro6000/).
+
+| Concurrency | Correct/30 | Stop / Length | Errors | Wall (s) | Problems/min | MTP accept | Speedup vs c=1 |
+|---|---|---|---|---|---|---|---|
+| c=1 (sequential) | **24/30** (80.0%) | 22 / 8 | 0 | 1453.9 | 1.24 | 90.61% | 1.0x |
+| c=2 | **23/30** (76.7%) | 23 / 7 | 0 | 787.6 | 2.29 | 90.75% | 1.85x |
+| c=4 | **21/30** (70.0%) | 20 / 10 | 0 | 386.6 | 4.66 | 90.93% | 3.76x |
+| c=8 | (terminated) | n/a | n/a | n/a | n/a | n/a | — |
+
+**Key findings:**
+- **0 errors and 0 stopped-but-wrong across c=1/2/4** — every wrong answer is length-truncated at max_tokens (not a quality issue, a budget issue). Non-truncated pass@1 is essentially 100% at all clean concurrencies.
+- **MTP acceptance stable at 90.6–90.9%** regardless of concurrency. The NVFP4 `flashinfer_trtllm` MoE backend is rock-solid on SM 12.0 under all tested batch sizes.
+- **c=8 throughput collapse**: TP=4 with no NVLink (PCIe-only) caused combined throughput to drop from 450 t/s @ c=4 to ~38 t/s @ c=8 — a 12× per-request slowdown. MTP itself stayed healthy; the bottleneck is TP-allreduce communication over PCIe at high concurrency. **Recommendation for higher aggregate throughput on RTX PRO 6000: run 2 replicas at TP=2 instead of 1 replica at TP=4 c=8.**
+
 Full benchmark write-ups in [`docs/benchmarks/`](docs/benchmarks/). Methodology and gotchas in [`docs/findings/`](docs/findings/).
 
 ## Quick start
