@@ -78,6 +78,18 @@ CUDA_HOME=/usr/local/cuda VLLM_TEST_FORCE_FP8_MARLIN=1 \
 
 For RTX PRO 6000 (SM 12.0), see [`docs/RECIPE_RTX6000PRO.md`](docs/RECIPE_RTX6000PRO.md) — needs 3 additional patches and the `VLLM_TEST_FORCE_FP8_MARLIN=1` env var. Full setup at [`docs/QUICKSTART.md`](docs/QUICKSTART.md). 5 patches + 14 gotchas catalog at [`docs/VLLM_SETUP_ISSUES.md`](docs/VLLM_SETUP_ISSUES.md).
 
+## vLLM patch series — [`vllm-patches/`](vllm-patches/)
+
+The full minimum patch series we apply on top of `jasl/vllm@a02a3778f` to serve this artifact on RTX PRO 6000 (SM 12.0). Each patch is documented with its upstream PR link, status, and rationale in [`vllm-patches/README.md`](vllm-patches/README.md):
+
+| Patch | Purpose | Upstream |
+|---|---|---|
+| `0001_marlin_moe_archs_40923.patch` | Build native sm_120a Marlin MoE cubins (eliminates JIT-PTX corruption) | [PR #40923](https://github.com/vllm-project/vllm/pull/40923) (open) |
+| `0002_marlin_moe_workspace_4x.patch` | Oversize Marlin MoE lock-array workspace 4× (defensive) | (to file as follow-up to #40923) |
+| `0003_marlin_moe_c_tmp_36889.patch` | Drop `min()` clamp on `c_tmp` FP32 reduce buffer (block decode safety) | [PR #36889](https://github.com/vllm-project/vllm/pull/36889) (closed, re-file candidate) |
+
+Card B works cleanly with patch 0001 alone (NVFP4 routed experts use `flashinfer_trtllm` MoE backend, which doesn't hit the Marlin moe wna16 paths that 0002/0003 fix). The patches matter for the W4A16-MTP sibling — applying all three on the same build is the recommended setup for parity.
+
 ## Why a new repo (vs the W4A16 sibling)
 
 NVFP4 vs W4A16 is a different code path in vLLM (NVFP4 MoE kernel vs Marlin), a different `Modifier` class in llm-compressor (`QuantizationModifier` vs `GPTQModifier`), and lands on a different `Modifier` because the GPTQ Hessian-reduce path hangs on multi-rank B300. Separate repos keep "what does this repo actually produce" easy to answer.
@@ -92,6 +104,11 @@ docs/
   VLLM_SETUP_ISSUES.md           — the 5 vLLM patches + 14 gotchas
   RECIPE_RTX6000PRO.md           — RTX PRO 6000 (SM 12.0) specific recipe
   FINDINGS.md                    — index of findings docs
+vllm-patches/                    — minimum patch series for current jasl/vllm
+  README.md                      — per-patch status, upstream PRs, rationale
+  0001_marlin_moe_archs_40923.patch
+  0002_marlin_moe_workspace_4x.patch
+  0003_marlin_moe_c_tmp_36889.patch
   benchmarks/                    — per-benchmark write-ups + raw JSONs
   findings/                      — methodology/diagnostic notes
   recipes/                       — calibration replication recipe
