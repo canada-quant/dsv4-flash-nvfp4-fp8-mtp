@@ -78,15 +78,51 @@ CUDA_HOME=/usr/local/cuda VLLM_TEST_FORCE_FP8_MARLIN=1 \
 
 For RTX PRO 6000 (SM 12.0), see [`docs/RECIPE_RTX6000PRO.md`](docs/RECIPE_RTX6000PRO.md) — needs 3 additional patches and the `VLLM_TEST_FORCE_FP8_MARLIN=1` env var. Full setup at [`docs/QUICKSTART.md`](docs/QUICKSTART.md). 5 patches + 14 gotchas catalog at [`docs/VLLM_SETUP_ISSUES.md`](docs/VLLM_SETUP_ISSUES.md).
 
-## vLLM patch series — [`vllm-patches/`](vllm-patches/)
+**One-shot RTX PRO 6000 install (canonical upstream-first path, 2026-05-26)**:
 
-The full minimum patch series we apply on top of `jasl/vllm@a02a3778f` to serve this artifact on RTX PRO 6000 (SM 12.0). Each patch is documented with its upstream PR link, status, and rationale in [`vllm-patches/README.md`](vllm-patches/README.md):
+```bash
+curl -sL https://raw.githubusercontent.com/canada-quant/dsv4-flash-nvfp4-fp8-mtp/main/scripts/install_rtx6000pro_v2.sh | CARD=B bash
+```
+
+The v2 installer pins to `vllm-project/vllm@main` (no longer requires the `jasl/vllm` fork — see "Canonical upstream path" below) and cherry-picks the three still-open patches we depend on. Build + download takes ~45–60 min on a Brev `g7e.24xlarge`.
+
+## Canonical upstream path — 2026-05-26 update
+
+Earlier sessions of this work pinned to `jasl/vllm@a02a3778f` because key DSv4 + SM 12.0 patches had not yet merged. As of 2026-05-26 several have landed upstream and the recommendation is now:
+
+**Use `vllm-project/vllm@main` (pinned to a specific SHA for reproducibility) + 3 still-open cherry-picks.**
+
+Merged upstream — no longer needed as separate patches:
+
+| Merged PR | What it does |
+|---|---|
+| [`#42209`](https://github.com/vllm-project/vllm/pull/42209) | NVFP4 MoE support for DSv4 (this card's exact code path) |
+| [`#40082`](https://github.com/vllm-project/vllm/pull/40082) | FlashInfer b12x MoE + FP4 GEMM for SM120/121 |
+| [`#43554`](https://github.com/vllm-project/vllm/pull/43554) | Remove NormGateLinear (fused into mhc_pre via [`#43474`](https://github.com/vllm-project/vllm/pull/43474)) — supersedes earlier local `packed_modules_mapping` patches |
+| [`#43149`](https://github.com/vllm-project/vllm/pull/43149) | Extract DSv4 sparse MLA into model folder (refactor) |
+| [`#43690`](https://github.com/vllm-project/vllm/pull/43690) | Drop `_get_compressed_kv_buffer` in DeepseekCompressor |
+
+Still required cherry-picks (still-open upstream PRs):
+
+| PR | What it does | Status |
+|---|---|---|
+| [`#40923`](https://github.com/vllm-project/vllm/pull/40923) | MARLIN_MOE_ARCHS gates 12.0a;12.1a native sm_120 cubins (eliminates JIT-PTX silent corruption) | OPEN, MERGEABLE, `ready, ci/build` labels |
+| [`#43655`](https://github.com/vllm-project/vllm/pull/43655) | Compressor/indexer `quant_config` plumbing + conditional `torch.mm` dispatch | OPEN, mergeable=CONFLICTING (rebase pending), `bug, deepseek` labels |
+| [`#36889`](https://github.com/vllm-project/vllm/pull/36889) | Marlin MoE `c_tmp` clamp removal (block-decode safety) | CLOSED — our [reopen-candidate evidence](https://github.com/vllm-project/vllm/pull/36889#issuecomment-4531289048) posted 2026-05-25 |
+
+Plus one local addition with no upstream PR yet:
+
+- Marlin MoE workspace 4× oversize in `vllm/model_executor/layers/quantization/utils/marlin_utils.py:268` (defensive — prevents `cudaErrorIllegalAddress` under concurrent W4A16 decode on SM 12.0)
+
+All four are in [`vllm-patches/`](vllm-patches/) and applied automatically by [`scripts/install_rtx6000pro_v2.sh`](scripts/install_rtx6000pro_v2.sh).
+
+## vLLM patch series — [`vllm-patches/`](vllm-patches/)
 
 | Patch | Purpose | Upstream |
 |---|---|---|
-| `0001_marlin_moe_archs_40923.patch` | Build native sm_120a Marlin MoE cubins (eliminates JIT-PTX corruption) | [PR #40923](https://github.com/vllm-project/vllm/pull/40923) (open) |
-| `0002_marlin_moe_workspace_4x.patch` | Oversize Marlin MoE lock-array workspace 4× (defensive) | (to file as follow-up to #40923) |
-| `0003_marlin_moe_c_tmp_36889.patch` | Drop `min()` clamp on `c_tmp` FP32 reduce buffer (block decode safety) | [PR #36889](https://github.com/vllm-project/vllm/pull/36889) (closed, re-file candidate) |
+| `0001_marlin_moe_archs_40923.patch` | Native sm_120a Marlin MoE cubins (eliminates JIT-PTX corruption) | [PR #40923](https://github.com/vllm-project/vllm/pull/40923) |
+| `0002_marlin_moe_workspace_4x.patch` | Marlin MoE workspace 4× oversize | (no upstream PR yet) |
+| `0003_marlin_moe_c_tmp_36889.patch` | Drop `min()` clamp on `c_tmp` FP32 reduce buffer | [PR #36889](https://github.com/vllm-project/vllm/pull/36889) |
 
 Card B works cleanly with patch 0001 alone (NVFP4 routed experts use `flashinfer_trtllm` MoE backend, which doesn't hit the Marlin moe wna16 paths that 0002/0003 fix). The patches matter for the W4A16-MTP sibling — applying all three on the same build is the recommended setup for parity.
 
