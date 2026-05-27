@@ -86,7 +86,52 @@ curl -sL https://raw.githubusercontent.com/canada-quant/dsv4-flash-nvfp4-fp8-mtp
 
 The v2 installer pins to `vllm-project/vllm@main` (no longer requires the `jasl/vllm` fork — see "Canonical upstream path" below) and cherry-picks the three still-open patches we depend on. Build + download takes ~45–60 min on a Brev `g7e.24xlarge`.
 
-## RTX PRO 6000 (SM 12.0) status — 2026-05-26 PM update
+## NVFP4 hardware execution reality on consumer Blackwell (SM 12.0) ⚠️
+
+**Honest naming:** the on-disk format is genuine NVFP4 — packed FP4 weights + FP8 E4M3 group scales + FP32 global scales (verified by safetensors header). You get the storage and GPU-memory-footprint win of 4-bit weights anywhere the artifact loads.
+
+**But on RTX PRO 6000 (SM 12.0, consumer Blackwell) today, the actual MoE matmul does NOT use FP4 tensor-core math.** Three reasons:
+
+1. **CUTLASS NVFP4 grouped-GEMM on sm_120 is broken** ([CUTLASS#3096](https://github.com/NVIDIA/cutlass/issues/3096), [FlashInfer#2723](https://github.com/flashinfer-ai/flashinfer/issues/2723)): all TMA-WS tactics produce garbage with `compute_120a`. The fix needs CUDA 13.0 + `compute_120f`, not yet in production toolchains.
+2. **vLLM's NVFP4 oracle gates** every server-Blackwell backend (FLASHINFER_TRTLLM, FLASHINFER_CUTEDSL, FLASHINFER_CUTLASS, VLLM_CUTLASS) on `device_capability_family(100)` — they refuse SM 12.0. The only sm_120-native NVFP4 MoE kernel that exists (`FlashInferB12xExperts`) is **intentionally excluded from auto-selection** ([source](https://github.com/vllm-project/vllm/blob/main/vllm/model_executor/layers/fused_moe/oracle/nvfp4.py#L174-L181)) until upstream CUTLASS SM121 issues resolve. Open PRs to enable: [#41738](https://github.com/vllm-project/vllm/pull/41738), [#43333](https://github.com/vllm-project/vllm/pull/43333), [#43341](https://github.com/vllm-project/vllm/pull/43341), [#43687](https://github.com/vllm-project/vllm/pull/43687).
+3. **The `VLLM_TEST_FORCE_FP8_MARLIN=1` env var** (needed today on SM 12.0 to load) short-circuits the NVFP4 oracle to `MarlinExperts` ([source](https://github.com/vllm-project/vllm/blob/main/vllm/model_executor/layers/fused_moe/oracle/nvfp4.py#L300-L304)). Marlin then runs `moe_wna16_marlin_gemm` with `b_q_type=scalar_types.float4_e2m1f` — weights stay packed FP4 in memory, but **Marlin dequantizes FP4→BF16 inside the kernel** and the matmul runs on BF16 tensor cores. vLLM emits the warning *"Your GPU does not have native support for FP4 computation but FP4 quantization is being used. Weight-only FP4 compression will be used leveraging the Marlin kernel."*
+
+**What this means in practice:**
+
+| | On B200/B300 (SM 10.0) | On RTX PRO 6000 (SM 12.0) today |
+|---|---|---|
+| Disk footprint | NVFP4 (~half FP8) | NVFP4 (~half FP8) ✓ memory win preserved |
+| GPU memory footprint | NVFP4 packed | NVFP4 packed ✓ memory win preserved |
+| MoE expert matmul | Native FP4 tensor cores (tcgen05) | **Marlin BF16 (FP4→BF16 dequant inside kernel)** |
+| FLOPS / throughput | ~2× vs BF16 | **Same as BF16** — no FLOPS win |
+| Functional correctness | ✓ | ✓ |
+| Memory bandwidth | NVFP4-optimal | NVFP4-optimal (weight load) ✓ |
+
+**On RTX PRO 6000, Card B's expert path is functionally equivalent throughput-class to Card D's W4A16 Marlin path** — both bottom out in the same Marlin BF16 kernel. The only Card B advantage on consumer Blackwell is the 2× memory savings vs Card D's W4A16 weights. To get genuine NVFP4 tensor-core math on Blackwell consumer hardware will require: CUDA 13.0 + `compute_120f` + FlashInfer SM 12.0 fixes + vLLM's B12X auto-select to land. ETA: weeks-to-months.
+
+For attention layers (FP8 block 128×128), **real FP8 tensor-core math** does execute on sm_120 — only the NVFP4 expert path is affected.
+
+## Which card on which hardware — decision matrix
+
+| Hardware | Card A (W4A16, no MTP) | Card D (W4A16-FP8-MTP) | Card B (NVFP4-FP8-MTP) | Pro |
+|---|---|---|---|---|
+| **B200 / B300 server** | ✓ works, no FP4 advantage | ✓ works, no FP4 advantage | ✅ **canonical** — real NVFP4 FLOPS + memory win | ✅ **canonical** — B300-only by design |
+| **H200 (Hopper)** | ✅ **canonical** broadest compat | ✅ **canonical** + ~1.5× MTP speedup | ✗ NVFP4 not supported on Hopper | ✗ not designed for Hopper |
+| **RTX PRO 6000 Server Edition (SM 12.0)** | ✓ historical (TP=2, no MTP) | ✅ **canonical** for thinking-mode (24/30 AIME c=4 verified 2026-05-27, 0 errors, 91.6% MTP) | ⚠️ works for short reasoning / chat / RAG; AIME-style LaTeX prompts still drift; MoE = Marlin BF16 not true FP4 | ✗ B300-only |
+| **DGX Spark / GB10 (SM 12.1a)** | ✅ **canonical** (dual-Spark TP=2) | ⚠️ not validated yet | ✗ NVFP4 path not validated | ✗ B300-only |
+
+**Pick-the-right-card by use case:**
+
+| Use case | Hardware | Recommended card | Why |
+|---|---|---|---|
+| Production batched thinking-mode (concurrent c≥4) on consumer Blackwell | RTX PRO 6000 SE | **Card D** | Verified 24/30 AIME-30 c=4, 0 errors, 91.6% MTP on jasl@27fd665b 2026-05-27 |
+| Tightest GPU memory footprint on consumer Blackwell | RTX PRO 6000 SE | **Card B** | NVFP4 storage even though FLOPS class = Card D |
+| Broadest hardware support (no MTP needed) | H200 / RTX PRO 6000 / DGX Spark | **Card A** | Predecessor, no MTP, simplest deployment |
+| Maximum throughput on server Blackwell | B300 SXM6 / B200 | **Card B** or **Pro** (V4-Pro) | Real FP4 tensor-core math via FlashInfer TRTLLM |
+| Single-Spark deployment | DGX Spark | **Card A** | Validated production path |
+| Largest base model (V4-Pro 671B) | B300 | **Pro** | Only V4-Pro variant we ship |
+
+## RTX PRO 6000 (SM 12.0) status — 2026-05-26/27 update
 
 Today's vllm-project/vllm@main (HEAD ~`6e503868ca`) ships block-FP8 dispatch that doesn't fully line up with SM 12.0 Blackwell consumer hardware. Today's investigation pinned **three orthogonal patch sets** that, applied together, make Card B load and serve coherent multi-step reasoning on RTX PRO 6000 Server Edition:
 
