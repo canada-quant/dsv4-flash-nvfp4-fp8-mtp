@@ -14,13 +14,15 @@ This directory is the **bridge** between our jasl/vllm runtime and our long-term
 | `0004_fp8_compressor_indexer_dequant.txt` | In-artifact BF16 dequant for compressor + indexer FP8 weights | artifact-level (documented) | n/a (artifact remediation, not vLLM patch) | n/a | One-time per artifact. Documented in each model card. |
 | `0005_e_score_correction_bias_defensive.patch` | Make missing `e_score_correction_bias` non-fatal in DSv4 loader | jasl-only (new) | (to file) | needs new upstream PR | Allows older calibrations to load on current vLLM. Card A blocker. |
 | `0006_sparse_mla_long_prefill_5d647981.patch` | Sparse MLA prefill stabilization | jasl-only | jasl/vllm@5d647981 | watch upstream | Lands in jasl ds4-sm120-preview-dev. Likely targets same race regime as #40923+#36889. |
+| `0007_marlin_can_implement_block_refuse.patch` | `MarlinFP8.can_implement` refuses block-FP8 layers | new (to file upstream) | (to file — issue #43564 follow-up) | needs new upstream PR | `VLLM_TEST_FORCE_FP8_MARLIN=1` (required for NVFP4 MoE on SM 12.0) makes the dispatcher pick MarlinFP8 for block-FP8 attention compressor (`fused_wqa_wkv`); Marlin's per-channel scale layout cannot serve block scales → `csrc/quantization/marlin/marlin.cu:701` fires. Refusing in `can_implement` lets the dispatcher fall through to `TritonFp8BlockScaledMMKernel`. Verified 2026-05-26 on RTX PRO 6000. |
+| `0008_dsv4_attention_wo_a_scale_fallback.patch` | `wo_a` scale getattr fallback in DSv4 attention | new (to file upstream) | (to file — sibling of #43655) | needs new upstream PR | Only `MarlinFP8.process_weights_after_loading` renames `weight_scale` → `weight_scale_inv`; the Triton block-FP8 path (now reachable via patch 0007) leaves the on-disk name. `attention.py:377` direct read of `wo_a.weight_scale_inv` AttributeErrors. getattr fallback is math-equivalent. |
 
 ## Apply order
 
 ```bash
 # from a clean upstream vllm-project/vllm checkout at the minimum supported tag
 cd vllm
-for p in vllm-patches/0001_*.patch vllm-patches/0002_*.patch vllm-patches/0003_*.patch vllm-patches/0005_*.patch vllm-patches/0006_*.patch; do
+for p in vllm-patches/0001_*.patch vllm-patches/0002_*.patch vllm-patches/0003_*.patch vllm-patches/0005_*.patch vllm-patches/0006_*.patch vllm-patches/0007_*.patch vllm-patches/0008_*.patch; do
     git apply --check "$p" && git apply "$p" || { echo "FAILED: $p"; exit 1; }
 done
 ```

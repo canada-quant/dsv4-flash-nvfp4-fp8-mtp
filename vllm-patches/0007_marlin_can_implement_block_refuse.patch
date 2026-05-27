@@ -1,0 +1,57 @@
+From: pasta-paul <paul@sunday.market>
+Date: 2026-05-26
+Subject: [PATCH] [Quantization] Refuse block-FP8 in MarlinFP8 can_implement
+
+Marlin's per-channel scale layout cannot handle block-FP8 scales (shape
+[N_blocks_n, N_blocks_k]) — the kernel TORCH_CHECKs b_scales.size(1) == size_n
+at csrc/quantization/marlin/marlin.cu:701 and fails for any block-quantized
+layer that reaches it.
+
+Block-FP8 layers routinely reach Marlin when operators set
+VLLM_TEST_FORCE_FP8_MARLIN=1 (required for NVFP4-MoE workloads on SM 12.0
+in current upstream) because the dispatch in
+_POSSIBLE_FP8_BLOCK_KERNELS[CUDA] places MarlinFP8 at priority 4 and the
+env-var override marks it as supported on all SM ≥ 89.
+
+The fix: have MarlinFP8.can_implement refuse layers whose activation_quant
+is per-group (= block-quantized). The dispatcher then falls through to the
+next supported kernel (TritonFp8BlockScaledMM, which handles block-FP8
+correctly).
+
+Reproducer: canada-quant/DeepSeek-V4-Flash-NVFP4-FP8-MTP on RTX PRO 6000
+Blackwell with VLLM_TEST_FORCE_FP8_MARLIN=1 (required for NVFP4 MoE).
+DSv4 compressor.fused_wqa_wkv ships FP8 block-128x128 scales — without
+this patch, dispatcher picks MarlinFP8 → marlin.cu:701 fires
+"b_scales dim 1 = 32 is not size_n = 1536".
+
+After patch: dispatcher picks TritonFp8BlockScaledMMKernel; engine loads,
+profile_run completes, model serves real completions.
+
+Signed-off-by: pasta-paul <paul@sunday.market>
+---
+ .../kernels/linear/scaled_mm/marlin.py        | 17 ++++++++++++++++-
+ 1 file changed, 16 insertions(+), 1 deletion(-)
+
+diff --git a/vllm/model_executor/kernels/linear/scaled_mm/marlin.py b/vllm/model_executor/kernels/linear/scaled_mm/marlin.py
+--- a/vllm/model_executor/kernels/linear/scaled_mm/marlin.py
++++ b/vllm/model_executor/kernels/linear/scaled_mm/marlin.py
+@@ class MarlinFP8ScaledMMLinearKernel(ScaledMMLinearKernel):
+     @classmethod
+     def can_implement(cls, c: FP8ScaledMMLinearLayerConfig) -> tuple[bool, str | None]:
+-        return True, None
++        # Marlin's per-channel scale layout cannot handle block-FP8 scales
++        # (shape [N_blocks_n, N_blocks_k]) → csrc/quantization/marlin/marlin.cu:701
++        # TORCH_CHECK b_scales.size(1) == size_n fires. Even when
++        # VLLM_TEST_FORCE_FP8_MARLIN=1 is set (which marks the kernel as
++        # supported on SM ≥ 89), block-FP8 attention layers like DSv4
++        # compressor.fused_wqa_wkv must fall back to the block-FP8 Triton
++        # kernel further down the priority list.
++        try:
++            if c.activation_quant_key.scale.group_shape.is_per_group():
++                return False, (
++                    "MarlinFP8 cannot serve block-FP8 layers; falling through "
++                    "to TritonFp8BlockScaledMMKernel via the dispatcher."
++                )
++        except Exception:
++            pass
++        return True, None

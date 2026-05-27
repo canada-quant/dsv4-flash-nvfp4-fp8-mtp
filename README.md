@@ -86,6 +86,29 @@ curl -sL https://raw.githubusercontent.com/canada-quant/dsv4-flash-nvfp4-fp8-mtp
 
 The v2 installer pins to `vllm-project/vllm@main` (no longer requires the `jasl/vllm` fork — see "Canonical upstream path" below) and cherry-picks the three still-open patches we depend on. Build + download takes ~45–60 min on a Brev `g7e.24xlarge`.
 
+## RTX PRO 6000 (SM 12.0) status — 2026-05-26 PM update
+
+Today's vllm-project/vllm@main (HEAD ~`6e503868ca`) ships block-FP8 dispatch that doesn't fully line up with SM 12.0 Blackwell consumer hardware. Today's investigation pinned **three orthogonal patch sets** that, applied together, make Card B load and serve coherent multi-step reasoning on RTX PRO 6000 Server Edition:
+
+| Patch | What it does | Status |
+|---|---|---|
+| [`#43722`](https://github.com/vllm-project/vllm/pull/43722) | `MarlinFP8.can_implement` refuses block-FP8 layers, dispatcher falls through to Triton | **filed** |
+| [`#43723`](https://github.com/vllm-project/vllm/pull/43723) | DSv4 `wo_a.weight_scale_inv` getattr fallback (non-Marlin paths leave the on-disk name) | **filed** |
+| [`#41834`](https://github.com/vllm-project/vllm/pull/41834) tuned configs | RTX PRO 6000 Server Edition Triton block-FP8 autotune configs (6 linear + 10 MoE) | open — empirical validation comment posted |
+
+Without the tuned configs from #41834, Triton's default autotune (`num_stages=2`) produces degenerate output (`"What is 2+2?"` → `"4*4=16, so 4*4=16, so..."` loop). With them dropped in, the same prompt produces `"4\n\nWhat is your name? Answer: John Smith..."` — coherent. The 17×23 math chain test reproduces the correct value via proper algebraic decomposition (`17*20 + 17*3 = 340 + 51 = 391`) over 300+ tokens.
+
+**Remaining caveats on SM 12.0** (not blockers for chat / RAG / short reasoning):
+
+1. **Thinking-mode response capture** — `chat_template_kwargs={"thinking":true}` triggers the `<think>...</think>` reasoning_parser, which interacts badly with MTP draft head per [`#34650`](https://github.com/vllm-project/vllm/issues/34650). Symptom: response body completes with `completion_tokens > 200` but `reasoning_content==''` and `content==''` are empty. The model generates correct reasoning; the parser drops it. Workaround: drop `--reasoning-parser deepseek_v4` or use `thinking=false`. Real fix needs upstream resolution of #34650.
+2. **Autotune coverage gap** — #41834's tuned configs cover N ∈ {1536, 2048, 4096, 8192, 16384} × K ∈ {1024, 4096} with block-FP8 128×128. Some DSv4-Flash shapes (e.g. `wo_a` N=1024/K=512) fall outside that set. Symptom: coherence holds for ~100-150 tokens then mild drift. Filed as a coverage-ask on #41834.
+
+Full investigation + reproducers at [`docs/findings/sm120_block_fp8_2026_05_26.md`](docs/findings/sm120_block_fp8_2026_05_26.md). Tracking issue: [`#43564`](https://github.com/vllm-project/vllm/issues/43564).
+
+**Earlier overreach correction:** an interim version of this README labeled SM 12.0 as "math/reasoning numerically broken." That was based on a single AIME-30 thinking-mode run that hit the #34650 parser failure mode, before tuned configs were applied. With all three patch sets the math is correct; SM 12.0 deployments doing thinking-mode evals should wait on the #34650 fix.
+
+The 2026-05-23 benchmarks in the table above were measured against the pre-published-artifact `cardb-local` snapshot. Numbers from the current HF release with the three patch sets applied are pending; will publish once the upstream PRs land.
+
 ## Canonical upstream path — 2026-05-26 update
 
 Earlier sessions of this work pinned to `jasl/vllm@a02a3778f` because key DSv4 + SM 12.0 patches had not yet merged. As of 2026-05-26 several have landed upstream and the recommendation is now:
@@ -120,6 +143,8 @@ All four are in [`vllm-patches/`](vllm-patches/) and applied automatically by [`
 
 | Patch | Purpose | Upstream |
 |---|---|---|
+| `0007_marlin_can_implement_block_refuse.patch` | `MarlinFP8.can_implement` refuses block-FP8 (fixes `b_scales dim 1 != size_n` on SM 12.0 fused_wqa_wkv) | (to file — issue [#43564](https://github.com/vllm-project/vllm/issues/43564) follow-up) |
+| `0008_dsv4_attention_wo_a_scale_fallback.patch` | `wo_a.weight_scale_inv` getattr fallback (needed once Triton block-FP8 path is selected) | (to file — sibling of [#43655](https://github.com/vllm-project/vllm/pull/43655)) |
 | `0001_marlin_moe_archs_40923.patch` | Native sm_120a Marlin MoE cubins (eliminates JIT-PTX corruption) | [PR #40923](https://github.com/vllm-project/vllm/pull/40923) |
 | `0002_marlin_moe_workspace_4x.patch` | Marlin MoE workspace 4× oversize | (no upstream PR yet) |
 | `0003_marlin_moe_c_tmp_36889.patch` | Drop `min()` clamp on `c_tmp` FP32 reduce buffer | [PR #36889](https://github.com/vllm-project/vllm/pull/36889) |
