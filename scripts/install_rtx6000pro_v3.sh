@@ -252,14 +252,21 @@ if [ -f "$VLLM_SRC/requirements/common.txt" ]; then
     pip install --upgrade -r "$VLLM_SRC/requirements/common.txt"
 fi
 
-# 9b. jasl-specific kernels — quant registry imports `humming` eagerly even for
-# non-humming models; workers import flashinfer for attention; mhc path needs
-# tilelang for JIT. cu12 wheels work fine despite jasl's cuda.txt preferring cu13.
-# nvidia-cutlass-dsl MUST be pinned to 4.5.0 — newer 4.5.2 removed `fmin` from
-# `cutlass.cute.arch` and breaks jasl's fp8_einsum / cutedsl_utils import path.
+# 9b. jasl-specific kernels pinned to versions verified end-to-end 2026-05-28.
+# - quant registry imports `humming` eagerly even for non-humming models
+# - workers import flashinfer for attention
+# - mhc path needs tilelang for JIT
+# - nvidia-cutlass-dsl MUST be 4.5.0; 4.5.2 removed `fmin` from cutlass.cute.arch
+#   and breaks jasl's sparse_attn_compress_cutedsl path.
+# cu12 wheels work fine despite jasl's cuda.txt preferring cu13.
 pip install --upgrade \
-    humming-kernels quack-kernels tokenspeed-mla fastsafetensors \
-    flashinfer-python flashinfer-cubin tilelang \
+    "humming-kernels==0.1.2" \
+    "quack-kernels==0.4.1" \
+    "tokenspeed-mla==0.1.5" \
+    "fastsafetensors==0.3.2" \
+    "flashinfer-python==0.6.11.post3" \
+    "flashinfer-cubin==0.6.11.post3" \
+    "tilelang==0.1.10" \
     "nvidia-cutlass-dsl==4.5.0"
 
 # 9c. ray distributed runtime (vllm uses for multiproc executor)

@@ -44,12 +44,23 @@
 # `torch/headeronly/` namespace, so we need a newer base. 26.04 verified
 # 2026-05-27.
 
-ARG BASE_IMAGE=nvcr.io/nvidia/pytorch:26.04-py3
+# Pinned to the exact image digest verified working 2026-05-28 to prevent NGC
+# from silently changing the base image under us (the `26.04-py3` tag is mutable).
+ARG BASE_IMAGE=nvcr.io/nvidia/pytorch@sha256:192d749b4d773610ec9e01c0443a9df545d196c412b7b8fd33bfa3da362a49e7
 FROM ${BASE_IMAGE}
 
 ARG VLLM_REPO=https://github.com/jasl/vllm.git
 ARG VLLM_BRANCH=ds4-sm120-preview-dev
+# jasl/vllm ds4-sm120-preview-dev pin verified 2026-05-28 (running TP=2 + CUDA graphs
+# end-to-end including AIME-5 thinking 4/5 + 90.65% MTP). HEAD as of 2026-05-27
+# was `a1b020012` ("Absorb SM120 external Marlin fixes") which would let us drop
+# our PR #43722/#43723 patches — left as future cleanup, current pin is verified.
 ARG VLLM_PIN=27fd665bdc3ba58afc5c34cbb9034c9fc1a95029
+# Full SHAs (not short prefixes) — a force-push to the branch can't break us.
+ARG CQ_VLLM_MTP_DETECT_SHA1=5a49d88031fb3ce635cdb60afa68eb0e696f2e59
+ARG CQ_VLLM_MTP_DETECT_SHA2=5acabf3152989606a9ddb3506d830b3a7caeac2d
+# PR #41834 (RTX PRO 6000 tuned Triton block-FP8 configs) HEAD SHA verified 2026-05-28
+ARG PR_41834_SHA=fd5fdbb4e579f929a90f27cdc4e392e587f2f932
 ARG TORCH_CUDA_ARCH_LIST=12.0a
 ARG MAX_JOBS=12
 
@@ -132,12 +143,14 @@ else:
 PYEOF
 
 # Patch 3 — PR #41834 tuned Triton block-FP8 autotune configs for sm_120
-RUN git fetch https://github.com/vllm-project/vllm.git refs/pull/41834/head:pr-41834 || true \
-    && (git checkout pr-41834 -- \
+# Pinned to the exact SHA we verified, not `refs/pull/41834/head`, so a future
+# rebase of the PR doesn't change behavior under us.
+RUN git fetch https://github.com/vllm-project/vllm.git ${PR_41834_SHA} \
+    && (git checkout ${PR_41834_SHA} -- \
             vllm/model_executor/layers/quantization/utils/configs/ \
             vllm/model_executor/layers/fused_moe/configs/ 2>/dev/null \
         || echo "[patch] PR #41834 configs already present (skipping)") \
-    && echo "[patch] PR #41834 tuned configs applied"
+    && echo "[patch] PR #41834 tuned configs applied (pin ${PR_41834_SHA})"
 
 # Patch 4 — Marlin MoE workspace 4× oversize (defensive vs cudaErrorIllegalAddress
 # under concurrent W4A16 decode; harmless for NVFP4-only Card B serve).
@@ -214,12 +227,12 @@ RUN git config user.email build@canada-quant.local \
     && git commit --allow-empty -m "canada-quant Docker: prior in-place patches" \
     && git remote add canada-quant https://github.com/canada-quant/vllm.git 2>/dev/null || true \
     && git fetch canada-quant fix/dsv4-mtp-draft-quant-detect \
-    && (git cherry-pick 5a49d8803 5acabf315 \
+    && (git cherry-pick ${CQ_VLLM_MTP_DETECT_SHA1} ${CQ_VLLM_MTP_DETECT_SHA2} \
         || (echo "[patch] cherry-pick conflict — reset attention.py and retry" \
             && git cherry-pick --abort \
             && git checkout HEAD~1 -- vllm/models/deepseek_v4/attention.py \
             && git commit --allow-empty -m "reset attention.py for clean cherry-pick" \
-            && git cherry-pick 5a49d8803 5acabf315)) \
+            && git cherry-pick ${CQ_VLLM_MTP_DETECT_SHA1} ${CQ_VLLM_MTP_DETECT_SHA2})) \
     && echo "[patch] BF16 MTP detect + wo_a BF16 ref path applied"
 
 # Patch 5 — PR #40923 (Marlin MoE sm_120a;sm_121a native cubins). At jasl@27fd665b
@@ -271,14 +284,17 @@ RUN PIP_CONSTRAINT=/tmp/torch-pin.txt pip install --upgrade \
 # is needed for MTP spec decode. cu13 extras are skipped — they pull
 # nvidia-cutlass-dsl 4.5.0 which wants CUDA 13 while NGC 26.04 ships CUDA 12.9
 # (jasl's cuda.txt prefers cu13 but the cu12 path works at runtime).
+# All jasl runtime kernels pinned to versions verified end-to-end 2026-05-28
+# (TP=2 + CUDA graphs + AIME-5 thinking 4/5 + 90.65% MTP). Newer versions of any
+# of these (especially nvidia-cutlass-dsl) have broken the recipe in our testing.
 RUN PIP_CONSTRAINT=/tmp/torch-pin.txt pip install --upgrade \
-        humming-kernels \
-        quack-kernels \
-        tokenspeed-mla \
-        fastsafetensors \
-        flashinfer-python \
-        flashinfer-cubin \
-        tilelang \
+        "humming-kernels==0.1.2" \
+        "quack-kernels==0.4.1" \
+        "tokenspeed-mla==0.1.5" \
+        "fastsafetensors==0.3.2" \
+        "flashinfer-python==0.6.11.post3" \
+        "flashinfer-cubin==0.6.11.post3" \
+        "tilelang==0.1.10" \
         "nvidia-cutlass-dsl==4.5.0"
 
 # DeepGEMM: jasl@27fd665b ships `sm12x_deep_gemm_fallbacks.py` as a self-contained

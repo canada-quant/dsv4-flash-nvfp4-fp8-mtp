@@ -102,6 +102,17 @@ First end-to-end-on-fresh-Docker measurement using `canada-quant/dsv4-rtx6000pro
 
 **Optimal config for 2× RTX PRO 6000 is single-user serving (bs=1).** For high-concurrency, use TP=4 on 4× cards or B200/B300 with native FP4. Raw JSONs and full smoke logs in [`benchmarks/rtxpro6000/tp2_*_2026_05_28.*`](https://github.com/canada-quant/dsv4-flash-nvfp4-fp8-mtp/tree/main/benchmarks/rtxpro6000).
 
+### Verified context window on 2× RTX PRO 6000
+
+Two profiles — both with MTP preserved, FP8 KV cache, TP=2:
+
+| Profile | max_model_len | max_num_seqs | cudagraph_capture_sizes | Use case | Headroom |
+|---|---|---|---|---|---|
+| Standard | 8192 | 2 | [1,2] | Multi-turn chat, agentic | ~3.5 GB free/GPU |
+| **Long-context** | **131072 (128K)** | **1** | **[2]** | Single-user RAG, doc analysis | ~3 GB free/GPU |
+
+The long-context profile uses `scripts/serve_rtx6000pro_tp2_longctx.sh`. Compressed-MLA + FP8 KV cache puts per-token cost at ~16 KB/GPU; 128K × 1 seq fits in the post-weights budget (3 GB/GPU free of 96 GB). Verified end-to-end 2026-05-28: serve loads, math smoke (`23×47` ones-digit decomposition) passes at ~40 tok/s. 256K would exceed the budget.
+
 ### Docker quickstart (2× RTX PRO 6000)
 
 ```bash
