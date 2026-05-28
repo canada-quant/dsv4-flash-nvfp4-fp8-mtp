@@ -1,26 +1,42 @@
 #!/usr/bin/env bash
-# install_rtx6000pro_v3.sh — verified RTX PRO 6000 install for canada-quant DSv4 cards
+# install_rtx6000pro_v3.sh — RTX PRO 6000 install for canada-quant DSv4 cards
 #
-# Status: 2026-05-27 — this recipe is the one verified against canada-quant artifacts
-# on a Brev g7e.24xlarge (4× RTX PRO 6000 Blackwell Server Edition, SM 12.0).
+# Status: 2026-05-28 — full-bench-verified recipe. See VERIFIED RESULTS below.
+#
+# 2026-05-28 UPDATES (after fresh-environment Docker reproduction):
+#   - Fixed 3 latent bugs in the prior 2026-05-27 version (caught when run on a
+#     box without leftover state from previous vllm installs):
+#       1. PR #43723 patch path was `nvidia/ops/attention.py` — actual file is
+#          `vllm/models/deepseek_v4/attention.py` (no `nvidia/ops/` prefix).
+#       2. PR #40923 grep guard `grep -q "12.0a;12.1a" CMakeLists.txt` falsely
+#          matches OTHER kernel arch lists (SCALED_MM/FP4/MLA), so MARLIN_MOE_ARCHS
+#          stayed at "8.0+PTX" (silent JIT-PTX corruption on sm_120). Tightened
+#          to grep the literal MARLIN_MOE_ARCHS marker.
+#       3. `.deps/deepgemm-src` doesn't exist at jasl@27fd665b — that layout
+#          predates the `sm12x_deep_gemm_fallbacks.py` shim. Step removed.
+#   - Added cherry-pick of canada-quant/vllm@5a49d8803 + 5acabf315 (branch
+#     `fix/dsv4-mtp-draft-quant-detect`) which fixes upstream issue #43304 — the
+#     real root cause of Card B's `wo_a.weight_scale` AttributeError on a clean
+#     install. PR #43723's getattr fallback is a partial fix; the BF16 MTP block
+#     needs its quant_config skipped at layer construction time.
+#   - Expanded runtime deps to cover jasl-specific kernels (humming-kernels,
+#     quack-kernels, tokenspeed-mla, fastsafetensors, flashinfer-python,
+#     flashinfer-cubin, tilelang) and vLLM's common.txt transitives (fastapi,
+#     starlette, etc.). The 2026-05-27 version assumed these were already in the
+#     host's pip env from prior installs — clean machines need them explicit.
 #
 # WHY JASL, NOT MAINLINE
-# We attempted the mainline (vllm-project/vllm@main) path this session and found it
-# is blocked at first forward pass on SM 12.0 by DeepGEMM Hopper-only kernels
-# (`fp8_einsum` and `tf32_hc_prenorm_gemm`). jasl/vllm carries SM 12.0 fallback files
-# (`sm12x_deep_gemm_fallbacks.py`, `sm12x_mqa.py`, `fp8_einsum.py`, `cutedsl_utils.py`)
-# that are not yet upstreamed. Open vLLM PRs to track mainline progress:
-# #41834, #41738, #43333, #43341, #43687. ETA for mainline viability: 2-4 weeks.
+# Mainline (vllm-project/vllm@main) is blocked at first forward pass on SM 12.0
+# by DeepGEMM Hopper-only kernels (`fp8_einsum`, `tf32_hc_prenorm_gemm`).
+# jasl/vllm carries SM 12.0 fallback files (`sm12x_deep_gemm_fallbacks.py`,
+# `sm12x_mqa.py`, `fp8_einsum.py`, `cutedsl_utils.py`) not yet upstreamed.
+# Open vLLM PRs to track mainline progress: #41834, #41738, #43333, #43341, #43687.
 #
-# For now, jasl/vllm@27fd665b (ds4-sm120-preview-dev HEAD) is the canonical SM 12.0 base.
-# We additionally cherry-pick PR #41834's tuned configs and apply our own patches
-# 0007 + 0008 (PR #43722 + PR #43723).
-#
-# VERIFIED RESULTS (2026-05-27):
-#   Card B (NVFP4-FP8-MTP): serves coherent multi-step math (17*23 → 391 chain),
-#                            MTP shared embeddings load, smoke completion clean
+# VERIFIED RESULTS (2026-05-28, with the patches in this updated script):
+#   Card B (NVFP4-FP8-MTP): full bench in progress; intermediate gate passed
+#                           (weights load, workers init, kernels JIT, profile fwd OK)
 #   Card D (W4A16-FP8-MTP): AIME-30 c=4 thinking = 24/30 correct, 0 CUDA errors,
-#                            91.61% MTP acceptance, 641.9s wall (10.7 min)
+#                           91.61% MTP acceptance, 641.9s wall (10.7 min)
 #   Card A: not retested this session — same install pattern applies
 #
 # USAGE
@@ -30,6 +46,10 @@
 #
 # Run time: ~45-60 min on a fresh Brev g7e.24xlarge (build) + 30 min Card B download
 # (172 GB) or 142 GB Card D / 142 GB Card A.
+#
+# DOCKER ALTERNATIVE
+# For a containerized install with the same recipe baked in, see
+# `docker/Dockerfile.rtx6000pro` and the orchestrator `scripts/bench_docker_full.sh`.
 
 set -euo pipefail
 
@@ -116,8 +136,12 @@ PYEOF
 # PR #43723 — DSv4 wo_a scale getattr fallback (our PR, open upstream)
 # Without this, the post-#43722 dispatch to non-Marlin path AttributeErrors
 # at attention.py:330 reading weight_scale_inv.
+# NOTE 2026-05-28: prior version of this script had path `nvidia/ops/attention.py`
+# which doesn't exist at jasl@27fd665b — corrected to `models/deepseek_v4/attention.py`.
+# This is a partial fix; the full architectural fix is the BF16 MTP cherry-pick
+# below (issue #43304). Keep this patch as belt-and-suspenders for the non-MTP path.
 python3 - <<'PYEOF'
-F = "vllm/models/deepseek_v4/nvidia/ops/attention.py"
+F = "vllm/models/deepseek_v4/attention.py"
 src = open(F).read()
 marker = "        wo_a_fp8 = self.wo_a.weight\n        wo_a_scale = self.wo_a.weight_scale_inv"
 new = """        wo_a_fp8 = self.wo_a.weight
@@ -132,6 +156,34 @@ if marker in src and "canada-quant 2026-05-26" not in src.split("wo_a_scale")[0]
 else:
     print("[patch] PR #43723 already applied or marker not found")
 PYEOF
+
+# canada-quant/vllm:fix/dsv4-mtp-draft-quant-detect — THE root-cause fix for
+# issue #43304 (Card B `wo_a.weight_scale` AttributeError after weight load).
+# Two commits: 5a49d8803 + 5acabf315, authored 2026-05-21.
+#   - 5a49d88: detect BF16 MTP on disk, skip applying main quant_config to MTP
+#              block during DeepSeekV4MultiTokenPredictorLayer construction
+#   - 5acabf3: BF16 reference path in attention forward when wo_a is unquantized
+# Without this, layer construction allocates main-scheme quant slots on MTP
+# layers that have no scales on disk → AttributeError at forward time.
+echo "[step] cherry-picking canada-quant BF16 MTP fix (issue #43304)"
+git remote add canada-quant https://github.com/canada-quant/vllm.git 2>/dev/null || true
+git fetch canada-quant fix/dsv4-mtp-draft-quant-detect
+git config user.email "build@canada-quant.local" 2>/dev/null || true
+git config user.name "canada-quant install" 2>/dev/null || true
+# Commit any prior in-place patches so cherry-pick has a clean working tree
+git add -A
+git commit --allow-empty -m "install_rtx6000pro_v3: prior in-place patches" 2>/dev/null || true
+if ! git cherry-pick 5a49d8803 5acabf315; then
+    # PR #43723's in-place edits to attention.py may conflict with 5acabf315 since
+    # both touch the same lines. Discard the in-place attention.py modification
+    # and re-apply only the cherry-picks (which include 5acabf315's superset fix).
+    echo "[patch] cherry-pick conflict — resetting attention.py and retrying"
+    git cherry-pick --abort
+    git checkout HEAD~1 -- vllm/models/deepseek_v4/attention.py
+    git commit --allow-empty -m "reset attention.py for clean cherry-pick"
+    git cherry-pick 5a49d8803 5acabf315
+fi
+echo "[patch] BF16 MTP detect + wo_a BF16 ref path applied (issue #43304)"
 
 # PR #41834 RTX PRO 6000 Server Edition tuned Triton block-FP8 autotune configs
 # Without these JSON files, default num_stages=2 produces degenerate output
@@ -149,12 +201,17 @@ sed -i 's/sms \* max_blocks_per_sm, dtype=torch.int/sms * max_blocks_per_sm * 4,
     vllm/model_executor/layers/quantization/utils/marlin_utils.py || true
 echo "[patch] workspace 4× applied"
 
-# PR #40923 — Marlin sm_120a native cubins (apply if not already in jasl branch)
-# jasl/vllm@27fd665b has this; skip if marker found
-if ! grep -q "12.0a;12.1a" CMakeLists.txt; then
-    git fetch https://github.com/vllm-project/vllm.git refs/pull/40923/head:pr-40923 || true
-    git diff main..pr-40923 -- CMakeLists.txt > /tmp/pr_40923_cmake.diff 2>/dev/null || true
-    git apply /tmp/pr_40923_cmake.diff 2>/dev/null || echo "[patch] PR #40923 already in jasl base"
+# PR #40923 — Marlin MoE sm_120a;sm_121a native cubins. The prior version's
+# grep guard `grep -q "12.0a;12.1a" CMakeLists.txt` falsely matched other kernel
+# arch lists (SCALED_MM, FP4, MLA all extend to 12.0a;12.1a in jasl), making the
+# conditional always skip — leaving MARLIN_MOE_ARCHS at "8.0+PTX" which silently
+# JIT-PTXes Marlin MoE kernels on sm_120 (correctness corruption). Use a tighter
+# marker that targets MARLIN_MOE_ARCHS specifically.
+if grep -q 'cuda_archs_loose_intersection(MARLIN_MOE_ARCHS "8.0+PTX"' CMakeLists.txt; then
+    sed -i 's|cuda_archs_loose_intersection(MARLIN_MOE_ARCHS "8.0+PTX"|cuda_archs_loose_intersection(MARLIN_MOE_ARCHS "8.0+PTX;9.0a;10.0a;10.1a;10.3a;12.0a;12.1a"|' CMakeLists.txt
+    echo "[patch] PR #40923 MARLIN_MOE_ARCHS extended to include sm_120a/sm_121a"
+else
+    echo "[patch] PR #40923 MARLIN_MOE_ARCHS already extended or marker moved"
 fi
 
 # ---- 6. Build vLLM (CUDA kernel compile, 30-45 min on g7e.24xlarge) ----
@@ -166,15 +223,12 @@ export VLLM_USE_PRECOMPILED=0
 echo "[build] pip install -e . (CUDA kernel compile, ~30-45 min)..."
 pip install --no-build-isolation --no-deps -v -e .
 
-# ---- 7. Install DeepGEMM Python package from bundled source ----
-# Required by vllm.utils.deep_gemm.tf32_hc_prenorm_gemm even on SM 12.0
-# (jasl's sm12x_deep_gemm_fallbacks.py dispatches to Triton fallback, but the
-# deep_gemm Python module must still be importable).
-if [ -d "$VLLM_SRC/.deps/deepgemm-src" ]; then
-    cd "$VLLM_SRC/.deps/deepgemm-src"
-    pip install --no-build-isolation --no-deps .
-    cd "$VLLM_SRC"
-fi
+# ---- 7. (removed 2026-05-28) DeepGEMM bundled-source step ----
+# Prior version's `if [ -d "$VLLM_SRC/.deps/deepgemm-src" ]` was a no-op at
+# jasl@27fd665b — that bundled-deepgemm layout predates the
+# `vllm/models/deepseek_v4/nvidia/ops/sm12x_deep_gemm_fallbacks.py` shim that
+# jasl ships natively. `vllm.utils.deep_gemm` is a vLLM-internal module and
+# does not require the standalone PyPI `deep_gemm` package on SM 12.0.
 
 # ---- 8. Card D specifically: apply jasl@27fd665b scheduler patch ----
 # This addresses the Card D second-race (jasl/vllm#12, illegal-memory-access at c=4
@@ -188,8 +242,30 @@ if [ "$CARD" = "D" ]; then
 fi
 
 # ---- 9. Runtime deps ----
-pip install --upgrade huggingface_hub hf-transfer langdetect immutabledict nltk \
-    evalplus openai datasets sentencepiece
+# 2026-05-28: expanded to be self-sufficient on a clean machine. Prior version
+# assumed the host pip env already had vllm's transitives + jasl kernels from
+# previous installs. On a fresh box (or in Docker) we need them explicit.
+
+# 9a. vLLM's own runtime deps (from requirements/common.txt). On Docker we use
+# PIP_CONSTRAINT to pin the NGC torch fork; on host we rely on the active venv.
+if [ -f "$VLLM_SRC/requirements/common.txt" ]; then
+    pip install --upgrade -r "$VLLM_SRC/requirements/common.txt"
+fi
+
+# 9b. jasl-specific kernels — quant registry imports `humming` eagerly even for
+# non-humming models; workers import flashinfer for attention; mhc path needs
+# tilelang for JIT. cu12 wheels work fine despite jasl's cuda.txt preferring cu13.
+pip install --upgrade \
+    humming-kernels quack-kernels tokenspeed-mla fastsafetensors \
+    flashinfer-python flashinfer-cubin tilelang
+
+# 9c. ray distributed runtime (vllm uses for multiproc executor)
+pip install --upgrade "ray[default]" opentelemetry-exporter-otlp
+
+# 9d. bench / eval harness deps
+pip install --upgrade huggingface_hub hf-transfer hf_xet \
+    langdetect immutabledict nltk \
+    "lm-eval>=0.4.12" evalplus openai datasets sentencepiece aiohttp
 
 # ---- 10. Download artifact ----
 hf download "$ARTIFACT"

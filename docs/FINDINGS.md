@@ -2,6 +2,14 @@
 
 One-line entry per finding doc, grouped by topic. Each links to a self-contained writeup.
 
+## Hardware compatibility
+
+- [NVFP4 cannot run on Hopper (SM 9.0)](findings/nvfp4_hopper_incompatible.md) — architectural exclusion: NVFP4 weights need tcgen05 (SM 10.0+). Hopper users want the W4A16 siblings instead.
+
+## Docker / install recipes
+
+- [Card B Docker on RTX PRO 6000 — 12-layer archaeology (2026-05-28)](findings/cardb_docker_layers_2026_05_28.md) — fresh-Docker reproduction of `install_rtx6000pro_v3.sh` uncovered 11 latent dep gaps + 3 script bugs + 1 root-cause architectural issue (#43304 BF16 MTP wo_a). Fixes baked into the updated v3 script + `docker/Dockerfile.rtx6000pro`.
+
 ## Methodology / measurement gotchas
 
 - [MTP acceptance rate methodology (67% vs 85% disambiguation)](findings/mtp_acceptance_rate_methodology_2026_05_21.md) — same metric, different prompt format (raw `/v1/completions` vs `/v1/chat/completions`) yields ~20pt acceptance spread on the same content. Always disambiguate.
