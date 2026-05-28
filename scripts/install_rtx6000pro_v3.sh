@@ -255,9 +255,12 @@ fi
 # 9b. jasl-specific kernels — quant registry imports `humming` eagerly even for
 # non-humming models; workers import flashinfer for attention; mhc path needs
 # tilelang for JIT. cu12 wheels work fine despite jasl's cuda.txt preferring cu13.
+# nvidia-cutlass-dsl MUST be pinned to 4.5.0 — newer 4.5.2 removed `fmin` from
+# `cutlass.cute.arch` and breaks jasl's fp8_einsum / cutedsl_utils import path.
 pip install --upgrade \
     humming-kernels quack-kernels tokenspeed-mla fastsafetensors \
-    flashinfer-python flashinfer-cubin tilelang
+    flashinfer-python flashinfer-cubin tilelang \
+    "nvidia-cutlass-dsl==4.5.0"
 
 # 9c. ray distributed runtime (vllm uses for multiproc executor)
 pip install --upgrade "ray[default]" opentelemetry-exporter-otlp

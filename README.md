@@ -60,15 +60,46 @@ Full benchmark write-ups in [`docs/benchmarks/`](docs/benchmarks/). Methodology 
 
 ## Quick start
 
-One-line installer (applies all common patches):
+Three deployment paths, pick by hardware:
+
+### 1. RTX PRO 6000 Blackwell Server Edition (SM 12.0) — Docker (recommended for mtcl-class deployments)
+
+```bash
+git clone https://github.com/canada-quant/dsv4-flash-nvfp4-fp8-mtp.git
+cd dsv4-flash-nvfp4-fp8-mtp
+docker build \
+  -f docker/Dockerfile.rtx6000pro \
+  -t canada-quant/dsv4-rtx6000pro:v3 \
+  .
+
+# Serve on 2× RTX PRO 6000 (mtcl's setup), CUDA graphs ON, MTP enabled
+docker run --rm --gpus '"device=0,1"' \
+  --shm-size=16g --ipc=host \
+  --ulimit memlock=-1 --ulimit stack=67108864 \
+  --network host \
+  -v $HOME/.cache/huggingface:/root/.cache/huggingface \
+  -v $(pwd)/scripts:/workspace/scripts:ro \
+  canada-quant/dsv4-rtx6000pro:v3 \
+  bash /workspace/scripts/serve_rtx6000pro_tp2.sh
+```
+
+Build ≈45 min (one-time), then ≈11 min model load + CUDA graph capture per serve start. **Verified 2026-05-28** on Brev `g7e.24xlarge` (4× RTX PRO 6000 Blackwell Server Edition).
+
+Other RTX PRO 6000 configs: `serve_rtx6000pro_tp4.sh` (4 GPUs, more headroom for concurrency) is the matching script.
+
+### 2. RTX PRO 6000 host install (no Docker)
+
+```bash
+curl -sL https://raw.githubusercontent.com/canada-quant/dsv4-flash-nvfp4-fp8-mtp/main/scripts/install_rtx6000pro_v3.sh | CARD=B bash
+```
+
+Pins `jasl/vllm@27fd665b` (`ds4-sm120-preview-dev`) + 5 patches + the `canada-quant/vllm:fix/dsv4-mtp-draft-quant-detect` cherry-pick (BF16 MTP wo_a fix for upstream issue #43304). Self-installs all jasl-specific runtime kernels (humming-kernels, quack-kernels, tokenspeed-mla, fastsafetensors, flashinfer-python, flashinfer-cubin, tilelang, nvidia-cutlass-dsl==4.5.0).
+
+### 3. B300 / B200 server (datacenter Blackwell)
 
 ```bash
 curl -sL https://raw.githubusercontent.com/canada-quant/dsv4-flash-nvfp4-fp8-mtp/main/scripts/install_vllm_with_patches.sh | bash
-```
 
-Serve with MTP spec-decode (B300):
-
-```bash
 CUDA_HOME=/usr/local/cuda VLLM_TEST_FORCE_FP8_MARLIN=1 \
   vllm serve canada-quant/DeepSeek-V4-Flash-NVFP4-FP8-MTP \
   --tensor-parallel-size 4 \
@@ -76,15 +107,9 @@ CUDA_HOME=/usr/local/cuda VLLM_TEST_FORCE_FP8_MARLIN=1 \
   --speculative-config '{"method":"mtp","num_speculative_tokens":2}'
 ```
 
-For RTX PRO 6000 (SM 12.0), see [`docs/RECIPE_RTX6000PRO.md`](docs/RECIPE_RTX6000PRO.md) — needs 3 additional patches and the `VLLM_TEST_FORCE_FP8_MARLIN=1` env var. Full setup at [`docs/QUICKSTART.md`](docs/QUICKSTART.md). 5 patches + 14 gotchas catalog at [`docs/VLLM_SETUP_ISSUES.md`](docs/VLLM_SETUP_ISSUES.md).
+B300 uses mainline `vllm-project/vllm@main` + 5 patches (PR #43248, #43288, #43290, #43319, #42209). This is the path the headline B300 measurements use.
 
-**One-shot RTX PRO 6000 install (canonical upstream-first path, 2026-05-26)**:
-
-```bash
-curl -sL https://raw.githubusercontent.com/canada-quant/dsv4-flash-nvfp4-fp8-mtp/main/scripts/install_rtx6000pro_v2.sh | CARD=B bash
-```
-
-The v2 installer pins to `vllm-project/vllm@main` (no longer requires the `jasl/vllm` fork — see "Canonical upstream path" below) and cherry-picks the three still-open patches we depend on. Build + download takes ~45–60 min on a Brev `g7e.24xlarge`.
+> **Note (2026-05-28):** an earlier `install_rtx6000pro_v2.sh` claimed mainline vLLM works on SM 12.0; it does not. Mainline is blocked at first forward pass by DeepGEMM Hopper-only kernel imports on consumer Blackwell. Use v3 (jasl-based) for RTX PRO 6000 until upstream PRs #41834/#41738/#43333/#43341/#43687 land.
 
 ## NVFP4 hardware execution reality on consumer Blackwell (SM 12.0) ⚠️
 

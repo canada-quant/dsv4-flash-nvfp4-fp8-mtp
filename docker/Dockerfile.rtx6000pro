@@ -163,6 +163,41 @@ else:
     import sys; sys.exit(1)
 PYEOF
 
+# Patch 4d — `cute.arch.fmin` shim. jasl's sparse_attn_compress_cutedsl.py uses
+# `cute.arch.fmin(a, b)` for FP8 clamp, but NO version of nvidia-cutlass-dsl on
+# PyPI (4.0.0 → 4.5.2) exposes `fmin` in `cutlass.cute.arch` — only `fmax`.
+# Rewrite each call site with the algebraic identity min(a,b) = -fmax(-a,-b).
+# 4 call sites in the same file, all with the same Float32 clamp shape.
+RUN python3 - <<'PYEOF'
+F = "vllm/models/deepseek_v4/common/ops/sparse_attn_compress_cutedsl.py"
+src = open(F).read()
+n_total = src.count("cute.arch.fmin(")
+old_block = """                y0 = cute.arch.fmin(
+                    cute.arch.fmax(q0 * inv_scale, Float32(-self.fp8_max)),
+                    Float32(self.fp8_max),
+                )
+                y1 = cute.arch.fmin(
+                    cute.arch.fmax(q1 * inv_scale, Float32(-self.fp8_max)),
+                    Float32(self.fp8_max),
+                )"""
+new_block = """                # canada-quant 2026-05-28: cute.arch.fmin missing on cutlass-dsl 4.5.0;
+                # algebraic identity min(a,b) = -max(-a,-b) using cute.arch.fmax.
+                _y0_inner = cute.arch.fmax(q0 * inv_scale, Float32(-self.fp8_max))
+                y0 = Float32(0) - cute.arch.fmax(Float32(0) - _y0_inner, Float32(-self.fp8_max))
+                _y1_inner = cute.arch.fmax(q1 * inv_scale, Float32(-self.fp8_max))
+                y1 = Float32(0) - cute.arch.fmax(Float32(0) - _y1_inner, Float32(-self.fp8_max))"""
+count = src.count(old_block)
+if count == 0:
+    print(f"[patch] cute.arch.fmin marker not found (total fmin call sites: {n_total})")
+    import sys; sys.exit(1)
+src = src.replace(old_block, new_block)
+remaining = src.count("cute.arch.fmin(")
+open(F, "w").write(src)
+print(f"[patch] cute.arch.fmin shim applied: replaced {count} block(s) ({n_total - remaining} call sites removed); remaining fmin refs: {remaining}")
+if remaining > 0:
+    import sys; sys.exit(2)
+PYEOF
+
 # Patch 4c — BF16 MTP wo_a fix (upstream issue #43304, root cause for Card B
 # blocking at `wo_a.weight_scale` AttributeError). Cherry-pick two commits from
 # `canada-quant/vllm:fix/dsv4-mtp-draft-quant-detect`:
@@ -243,7 +278,8 @@ RUN PIP_CONSTRAINT=/tmp/torch-pin.txt pip install --upgrade \
         fastsafetensors \
         flashinfer-python \
         flashinfer-cubin \
-        tilelang
+        tilelang \
+        "nvidia-cutlass-dsl==4.5.0"
 
 # DeepGEMM: jasl@27fd665b ships `sm12x_deep_gemm_fallbacks.py` as a self-contained
 # Triton shim for SM 12.0, and `vllm.utils.deep_gemm` is a vLLM-internal module.

@@ -1,0 +1,100 @@
+=== SMOKE 1: math ===
+text: Alright, let's break this down step-by-step.
+
+We want to calculate:
+
+\[
+47 \times 89
+\]
+
+One easy way is to use the distributive property:
+
+\[
+47 \times 89 = 47 \times (90 - 1)
+\]
+
+First, calculate \(47 \times 90\):
+
+\[
+47 \times 90 = 47 \times 9 \times 10 = 423 \times 10 = 4230
+\]
+
+Then subtract \(
+tokens: 120
+
+real	0m1.702s
+user	0m0.016s
+sys	0m0.006s
+
+=== SMOKE 2: code ===
+text: Here's a Python function that computes the nth Fibonacci number iteratively:
+
+```python
+def fibonacci_iterative(n):
+    """
+    Compute the nth Fibonacci number iteratively.
+    
+    Args:
+        n: The position in the Fibonacci sequence (0-indexed)
+            n=0 returns 0, n=1 returns 1, n=2 returns 1, etc.
+    
+    Returns:
+        The nth Fibonacci number
+    
+    Raises:
+        ValueError:
+tokens: 200
+
+real	0m1.528s
+user	0m0.018s
+sys	0m0.004s
+
+=== SMOKE 3: reasoning chain ===
+text: Let’s go step-by-step.
+
+**Step 1: Understand the problem**  
+- Train 1 speed = 60 mph  
+- Train 2 speed = 80 mph  
+- Distance between cities = 280 miles  
+- They are moving toward each other.
+
+**Step 2: Find the combined speed**  
+When two objects move toward each other, their speeds add up.  
+Combined speed = \( 60 + 80 = 140 \) mph.
+
+**Step 3: Use the formula**  
+Time = Distance ÷ Speed  
+Time = \( \frac{280}{140} = 2 \) hours.
+
+**Step 4: Conclusion**  
+They meet after **2 hours**.
+
+\[
+\boxed{
+tokens: 157
+
+real	0m2.306s
+user	0m0.014s
+sys	0m0.008s
+
+=== SMOKE 4: MTP metrics ===
+# HELP vllm:spec_decode_num_drafts_total Number of spec decoding drafts.
+# TYPE vllm:spec_decode_num_drafts_total counter
+vllm:spec_decode_num_drafts_total{engine="0",model_name="DSV4-NVFP4-FP8-MTP"} 363.0
+# HELP vllm:spec_decode_num_drafts_created Number of spec decoding drafts.
+# TYPE vllm:spec_decode_num_drafts_created gauge
+vllm:spec_decode_num_drafts_created{engine="0",model_name="DSV4-NVFP4-FP8-MTP"} 1.7799950135589519e+09
+# HELP vllm:spec_decode_num_draft_tokens_total Number of draft tokens.
+# TYPE vllm:spec_decode_num_draft_tokens_total counter
+vllm:spec_decode_num_draft_tokens_total{engine="0",model_name="DSV4-NVFP4-FP8-MTP"} 363.0
+# HELP vllm:spec_decode_num_draft_tokens_created Number of draft tokens.
+# TYPE vllm:spec_decode_num_draft_tokens_created gauge
+vllm:spec_decode_num_draft_tokens_created{engine="0",model_name="DSV4-NVFP4-FP8-MTP"} 1.7799950135589793e+09
+# HELP vllm:spec_decode_num_accepted_tokens_total Number of accepted tokens.
+# TYPE vllm:spec_decode_num_accepted_tokens_total counter
+vllm:spec_decode_num_accepted_tokens_total{engine="0",model_name="DSV4-NVFP4-FP8-MTP"} 347.0
+# HELP vllm:spec_decode_num_accepted_tokens_created Number of accepted tokens.
+# TYPE vllm:spec_decode_num_accepted_tokens_created gauge
+vllm:spec_decode_num_accepted_tokens_created{engine="0",model_name="DSV4-NVFP4-FP8-MTP"} 1.7799950135589957e+09
+# HELP vllm:spec_decode_num_accepted_tokens_per_pos_total Accepted tokens per draft position.
+# TYPE vllm:spec_decode_num_accepted_tokens_per_pos_total counter

@@ -1,0 +1,74 @@
+{
+  "meta": {
+    "timestamp_utc": "2026-05-28T19:30:06.123540+00:00",
+    "dataset": "Maxwell-Jia/AIME_2024",
+    "model": "DSV4-NVFP4-FP8-MTP",
+    "concurrency": 1,
+    "max_tokens": 8000,
+    "thinking": true,
+    "n": 5
+  },
+  "totals": {
+    "correct": 4,
+    "errors": 0,
+    "wallclock_s": 129.38077449798584,
+    "finish_reasons": {
+      "stop": 4,
+      "length": 1
+    }
+  },
+  "mtp_delta": {
+    "d_drafts": 9442.0,
+    "d_draft_tokens": 9442.0,
+    "d_accepted_tokens": 8559.0,
+    "acceptance_rate": 0.9064816776106757,
+    "tokens_per_step": null
+  },
+  "details": [
+    {
+      "id": "2024-II-4",
+      "ok": true,
+      "finish_reason": "stop",
+      "wall_s": 7.1887969970703125,
+      "completion_tokens": 1020,
+      "predicted": 33,
+      "ground_truth": 33
+    },
+    {
+      "id": "2024-II-12",
+      "ok": true,
+      "finish_reason": "stop",
+      "wall_s": 30.78115940093994,
+      "completion_tokens": 4271,
+      "predicted": 23,
+      "ground_truth": 23
+    },
+    {
+      "id": "2024-I-4",
+      "ok": true,
+      "finish_reason": "stop",
+      "wall_s": 10.943105936050415,
+      "completion_tokens": 1520,
+      "predicted": 116,
+      "ground_truth": 116
+    },
+    {
+      "id": "2024-I-3",
+      "ok": true,
+      "finish_reason": "stop",
+      "wall_s": 22.683616876602173,
+      "completion_tokens": 3193,
+      "predicted": 809,
+      "ground_truth": 809
+    },
+    {
+      "id": "2024-I-8",
+      "ok": false,
+      "finish_reason": "length",
+      "wall_s": 57.783687591552734,
+      "completion_tokens": 8000,
+      "predicted": null,
+      "ground_truth": 197
+    }
+  ]
+}
