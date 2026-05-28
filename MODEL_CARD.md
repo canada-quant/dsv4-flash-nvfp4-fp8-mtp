@@ -88,6 +88,39 @@ For context on the same RTX PRO 6000 box, the W4A16+FP8+MTP sibling measured 98.
 
 Three SM 12.0-specific vLLM patches are required beyond the four common patches below. Recipe + diffs in [`docs/RECIPE_RTX6000PRO.md`](https://github.com/canada-quant/dsv4-flash-nvfp4-fp8-mtp/blob/main/docs/RECIPE_RTX6000PRO.md). Raw bench JSONs in `benchmarks/rtx6000pro/`.
 
+### 2× RTX PRO 6000 (mtcl-class setup, 2026-05-28 Docker verification)
+
+First end-to-end-on-fresh-Docker measurement using `canada-quant/dsv4-rtx6000pro:v3` image. TP=2, MTP k=1, CUDA graphs ON (`cudagraph_capture_sizes=[1,2]`), `max_model_len=8192`, `max_num_seqs=2`, `gpu_memory_utilization=0.95`.
+
+| Benchmark | Result |
+|---|---|
+| AIME-2024 mini (5 problems, c=1, thinking=high) | **4/5 = 80% correct**, 0 errors, MTP acceptance **90.65%**, 129 s wall |
+| Throughput bs=1 random 256/256 | 45.14 tok/s avg / 73.00 tok/s peak, median TPOT 8.13 ms |
+| Throughput bs=2 | 21.13 tok/s avg (per-stream 10.5 — TP-allreduce comm-bound over PCIe) |
+| Tool calling | ✅ structured `tool_calls` emit with deepseek_v4 parser |
+| Thinking mode | ⚠️ functional, reasoning goes to `content` (upstream issue #34650) |
+
+**Optimal config for 2× RTX PRO 6000 is single-user serving (bs=1).** For high-concurrency, use TP=4 on 4× cards or B200/B300 with native FP4. Raw JSONs and full smoke logs in [`benchmarks/rtxpro6000/tp2_*_2026_05_28.*`](https://github.com/canada-quant/dsv4-flash-nvfp4-fp8-mtp/tree/main/benchmarks/rtxpro6000).
+
+### Docker quickstart (2× RTX PRO 6000)
+
+```bash
+git clone https://github.com/canada-quant/dsv4-flash-nvfp4-fp8-mtp.git
+cd dsv4-flash-nvfp4-fp8-mtp
+docker build -f docker/Dockerfile.rtx6000pro -t canada-quant/dsv4-rtx6000pro:v3 .
+
+docker run --rm --gpus '"device=0,1"' \
+  --shm-size=16g --ipc=host \
+  --ulimit memlock=-1 --ulimit stack=67108864 \
+  --network host \
+  -v $HOME/.cache/huggingface:/root/.cache/huggingface \
+  -v $(pwd)/scripts:/workspace/scripts:ro \
+  canada-quant/dsv4-rtx6000pro:v3 \
+  bash /workspace/scripts/serve_rtx6000pro_tp2.sh
+```
+
+Build ≈45 min (one-time, 366 CUDA objects), ≈11 min serve startup (weight load + CUDA graph capture). All 13 patch layers documented in [`docs/findings/cardb_docker_layers_2026_05_28.md`](https://github.com/canada-quant/dsv4-flash-nvfp4-fp8-mtp/blob/main/docs/findings/cardb_docker_layers_2026_05_28.md).
+
 ### MTP draft acceptance per workload (B300)
 
 | Workload | Acceptance |
