@@ -117,6 +117,16 @@ The long-context profile uses `scripts/serve_rtx6000pro_tp2_longctx.sh`. Compres
 
 ### Docker quickstart (2× RTX PRO 6000)
 
+**Option A — load the pre-built image (recommended, no compile):** the verified-working image is published as an OCI tarball at [`canada-quant/dsv4-flash-nvfp4-rtxpro6000-image`](https://huggingface.co/datasets/canada-quant/dsv4-flash-nvfp4-rtxpro6000-image) (~14 GB compressed, xet-accelerated):
+
+```bash
+hf download --repo-type dataset canada-quant/dsv4-flash-nvfp4-rtxpro6000-image --local-dir ./image
+gunzip -c ./image/dsv4-rtx6000pro-v3.tar.gz | docker load
+# Then proceed directly to `docker run ...` below
+```
+
+**Option B — build from source** (~45 min, source of truth):
+
 ```bash
 git clone https://github.com/canada-quant/dsv4-flash-nvfp4-fp8-mtp.git
 cd dsv4-flash-nvfp4-fp8-mtp

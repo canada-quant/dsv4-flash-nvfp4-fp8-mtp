@@ -64,6 +64,15 @@ Three deployment paths, pick by hardware:
 
 ### 1. RTX PRO 6000 Blackwell Server Edition (SM 12.0) — Docker (recommended for mtcl-class deployments)
 
+**Pre-built image** (5-10 min download, no source compile): [`canada-quant/dsv4-flash-nvfp4-rtxpro6000-image`](https://huggingface.co/datasets/canada-quant/dsv4-flash-nvfp4-rtxpro6000-image) hosts a 14 GB tarball of the verified-working image.
+
+```bash
+hf download --repo-type dataset canada-quant/dsv4-flash-nvfp4-rtxpro6000-image --local-dir ./image
+gunzip -c ./image/dsv4-rtx6000pro-v3.tar.gz | docker load
+```
+
+**Or build from source** (~45 min for 366 CUDA objects; source of truth for reproducibility):
+
 ```bash
 git clone https://github.com/canada-quant/dsv4-flash-nvfp4-fp8-mtp.git
 cd dsv4-flash-nvfp4-fp8-mtp
