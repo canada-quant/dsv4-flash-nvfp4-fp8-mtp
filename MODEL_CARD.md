@@ -94,7 +94,8 @@ First end-to-end-on-fresh-Docker measurement using `canada-quant/dsv4-rtx6000pro
 
 | Benchmark | Result |
 |---|---|
-| AIME-2024 mini (5 problems, c=1, thinking=high) | **4/5 = 80% correct**, 0 errors, MTP acceptance **90.65%**, 129 s wall |
+| **AIME-2024 full 30 (c=1, thinking=high, max_tokens=32000)** | **24/30 = 80.0% correct** ✓ matches baseline exactly, 0 errors, MTP acceptance **91.05%**, 2587 s wall (uses 32K-context serve profile) |
+| AIME-2024 mini (5 problems, c=1, thinking=high) | 4/5 = 80% correct, 0 errors, MTP 90.65%, 129 s |
 | Throughput bs=1 random 256/256 | 45.14 tok/s avg / 73.00 tok/s peak, median TPOT 8.13 ms |
 | Throughput bs=2 | 21.13 tok/s avg (per-stream 10.5 — TP-allreduce comm-bound over PCIe) |
 | Tool calling | ✅ structured `tool_calls` emit with deepseek_v4 parser |
