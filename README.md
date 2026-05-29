@@ -111,6 +111,8 @@ B300 uses mainline `vllm-project/vllm@main` + 5 patches (PR #43248, #43288, #432
 
 > **Note (2026-05-28):** an earlier `install_rtx6000pro_v2.sh` claimed mainline vLLM works on SM 12.0; it does not. Mainline is blocked at first forward pass by DeepGEMM Hopper-only kernel imports on consumer Blackwell. Use v3 (jasl-based) for RTX PRO 6000 until upstream PRs #41834/#41738/#43333/#43341/#43687 land.
 
+**RTX PRO 6000-specific operator tips** (memory budgeting, MTP+cudagraph constraints, three serve profiles for chat / long-reasoning / 128K-context, `include_reasoning` field rename, common pitfalls): see [`docs/RTX_PRO_6000_TIPS.md`](docs/RTX_PRO_6000_TIPS.md).
+
 ## NVFP4 hardware execution reality on consumer Blackwell (SM 12.0) ⚠️
 
 **Honest naming:** the on-disk format is genuine NVFP4 — packed FP4 weights + FP8 E4M3 group scales + FP32 global scales (verified by safetensors header). You get the storage and GPU-memory-footprint win of 4-bit weights anywhere the artifact loads.
