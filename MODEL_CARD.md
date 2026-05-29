@@ -99,7 +99,8 @@ First end-to-end-on-fresh-Docker measurement using `canada-quant/dsv4-rtx6000pro
 | Throughput bs=1 random 256/256 | 45.14 tok/s avg / 73.00 tok/s peak, median TPOT 8.13 ms |
 | Throughput bs=2 | 21.13 tok/s avg (per-stream 10.5 — TP-allreduce comm-bound over PCIe) |
 | Tool calling | ✅ structured `tool_calls` emit with deepseek_v4 parser |
-| Thinking mode | ⚠️ functional, reasoning goes to `content` (upstream issue #34650) |
+| Thinking mode (`chat_template_kwargs.thinking=true`) | ✅ full reasoning chain preserved when client requests `include_reasoning: true` — read the `reasoning` field (renamed from `reasoning_content` in vLLM 0.21+) |
+| Reasoning effort levels (off / high / max) | ✅ all three work — `high` uses ~1.5K reasoning tokens, `max` uses ~3K; both return correct answers + content with `finish_reason=stop` |
 
 **Optimal config for 2× RTX PRO 6000 is single-user serving (bs=1).** For high-concurrency, use TP=4 on 4× cards or B200/B300 with native FP4. Raw JSONs and full smoke logs in [`benchmarks/rtxpro6000/tp2_*_2026_05_28.*`](https://github.com/canada-quant/dsv4-flash-nvfp4-fp8-mtp/tree/main/benchmarks/rtxpro6000).
 
