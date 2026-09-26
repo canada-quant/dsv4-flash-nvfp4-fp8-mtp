@@ -19,7 +19,7 @@ Reproduction repo for [`canada-quant/DeepSeek-V4-Flash-NVFP4-FP8-MTP`](https://h
 | **this repo** (`dsv4-flash-nvfp4-fp8-mtp`) | [NVFP4-FP8-MTP](https://huggingface.co/canada-quant/DeepSeek-V4-Flash-NVFP4-FP8-MTP) | **B200 / B300 only.** NVFP4 routed experts + MTP, datacenter Blackwell native FP4 tcgen05 path |
 | [`canada-quant/dsv4-flash-w4a16-fp8-mtp`](https://github.com/canada-quant/dsv4-flash-w4a16-fp8-mtp) | [W4A16-FP8-MTP](https://huggingface.co/canada-quant/DeepSeek-V4-Flash-W4A16-FP8-MTP) | **Recommended for RTX PRO 6000 / DGX Spark / consumer Blackwell + H200.** W4A16 routed experts, broad hardware support, same MTP-retention pattern |
 | [`canada-quant/dsv4-flash-w4a16-fp8`](https://github.com/canada-quant/dsv4-flash-w4a16-fp8) | [W4A16-FP8](https://huggingface.co/canada-quant/DeepSeek-V4-Flash-W4A16-FP8) | predecessor (no-MTP baseline) — broadest hardware compatibility |
-| [`canada-quant/dsv4-pro-nvfp4-fp8-mtp`](https://github.com/canada-quant/dsv4-pro-nvfp4-fp8-mtp) | [Pro NVFP4-FP8-MTP](https://huggingface.co/canada-quant/DeepSeek-V4-Pro-NVFP4-FP8-MTP) | larger sibling — V4-Pro NVFP4 + MTP, B300-only |
+| `canada-quant/dsv4-pro-nvfp4-fp8-mtp` (private) | [Pro NVFP4-FP8-MTP](https://huggingface.co/canada-quant/DeepSeek-V4-Pro-NVFP4-FP8-MTP) | larger sibling — V4-Pro NVFP4 + MTP, B300-only |
 
 ## Headline measurements — 4× B300 SXM6 AC (Blackwell SM 10.3, sm_103a), TP=4
 
